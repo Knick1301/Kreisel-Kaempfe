@@ -1,4 +1,4 @@
-# Kontinuierliche Kreisel-Kämpfe
+# Kreisel-Kämpfe
 
 Ein Online-Multiplayer-Spiel, in dem Spieler ihre eigenen Kampfkreisel zusammenstellen und in einer Arena gegeneinander antreten.
 
