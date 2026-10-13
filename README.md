@@ -23,7 +23,7 @@ Projekt im Rahmen der Vorlesung **Software Engineering** (3. und 4. Semester) an
 
 ## Tech-Stack
 
-Vue + Tailwind.css, Java-Backend, _Datenbank, Test-Framework und CI/CD stehen noch aus_
+Vue + Tailwind.css, Java-Backend, H2-Database, Test-Framework und CI/CD stehen noch aus_
 
 ## Projektorganisation
 
