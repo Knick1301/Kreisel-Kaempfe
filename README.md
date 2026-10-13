@@ -14,12 +14,12 @@ Projekt im Rahmen der Vorlesung **Software Engineering** (3. und 4. Semester) an
 
 | Name | Scrum-Rolle | Schwerpunkt |
 |------|-------------|-------------|
-| _TODO_ | Product Owner | | Hannes Bunse #hannesarbeit8-hash
-| _TODO_ | Scrum Master | | Joni Strecker #js1js1js1
-| _TODO_ | Development Team | | Yannick Weber #Knick1301
-| _TODO_ | Development Team | | Maxi Bühner #maxiii1232
-| _TODO_ | Development Team | | Tim Reichert #TiRe0110
-| _TODO_ | Documentation | | Kerem Prato #prkeMeiko
+| _TODO_ | Product Owner | | Hannes Bunse #hannesarbeit8-hash |
+| _TODO_ | Scrum Master | | Joni Strecker #js1js1js1 |
+| _TODO_ | Development Team | | Yannick Weber #Knick1301 |
+| _TODO_ | Development Team | | Maxi Bühner #maxiii1232 |
+| _TODO_ | Development Team | | Tim Reichert #TiRe0110 |
+| _TODO_ | Documentation | | Kerem Prato #prkeMeiko |
 
 ## Tech-Stack
 
