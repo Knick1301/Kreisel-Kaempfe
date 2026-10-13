@@ -12,8 +12,8 @@ Projekt im Rahmen der Vorlesung **Software Engineering** (3. und 4. Semester) an
 
 ## Team & Rollen
 
-| Name | Scrum-Rolle | GitHub | Schwerpunkt |
-|------|-------------|--------|-------------|
+| Name | Scrum-Rolle | GitHub |
+|------|-------------|--------|
 | Hannes Bunse | Product Owner | [@hannesarbeit8-hash](https://github.com/hannesarbeit8-hash) | |
 | Joni Strecker | Scrum Master | [@js1js1js1](https://github.com/js1js1js1) | |
 | Yannick Weber | Development Team | [@Knick1301](https://github.com/Knick1301) | |
