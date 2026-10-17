@@ -1,1 +1,93 @@
 
+# Kreiselkämpfe
+## Softwareanforderungen
+
+### 1. Einleitung
+
+#### 1.1 Übersicht
+Kreiselkämpfe ist ein digitales Spiel, das sich am Prinzip von Beyblade orientiert. Spieler können verschiedene Kreisel auswählen und diese in einer Arena gegeneinander antreten lassen. Ziel ist es, den gegnerischen Kreisel zu besiegen.
+
+#### 1.2 Geltungsbereich
+Dieses Dokument beschreibt die funktionalen und nicht-funktionalen Anforderungen an Kreiselkämpfe. Der Schwerpunkt liegt auf der Spielmechanik und der Benutzeroberfläche.
+
+#### 1.3 Definitionen und Abkürzungen
+- **Arena:** Spielfeld, in dem die Kreisel gegeneinander antreten.
+- **Kreisel:** Spielobjekt, das vom Spieler oder Computer gesteuert wird.
+- **UI:** User Interface (Benutzeroberfläche).
+
+#### 1.4 Referenzen
+- IBM Rational Unified Process (RUP) – Vorlage für Softwareanforderungen
+
+### 2. Funktionale Anforderungen
+
+#### 2.1 Übersicht
+In Kreiselkämpfe treten zwei Kreisel in einer Arena gegeneinander an. Die Kreisel besitzen unterschiedliche Eigenschaften und verlieren während des Kampfes Energie.
+
+Die wichtigsten Funktionen sind:
+- Kreisel auswählen und Kampf starten
+- Kreisel steuern und Kollisionen simulieren
+- Energieverlust berechnen
+- Gewinner ermitteln und anzeigen
+
+#### 2.2 Kreisel auswählen und Kampf starten
+
+**User Story:** Als Spieler möchte ich einen Kreisel auswählen und einen Kampf starten können.
+
+**Anforderungen:**
+- Der Spieler kann im Hauptmenü einen Kampf starten.
+- Es stehen verschiedene Kreisel zur Auswahl.
+- Die Kreisel unterscheiden sich in Geschwindigkeit, Angriff und Ausdauer.
+- Nach der Auswahl wird die Arena geladen.
+
+**Voraussetzung:** Das Spiel wurde gestartet.
+
+**Nachbedingung:** Der ausgewählte Kreisel befindet sich in der Arena und der Kampf kann beginnen.
+
+**Geschätzter Aufwand:** Mittel
+
+#### 2.3 Kampfmechanik
+
+**User Story:** Als Spieler möchte ich meinen Kreisel steuern und gegen einen Gegner kämpfen.
+
+**Anforderungen:**
+- Zwei Kreisel bewegen sich in einer begrenzten Arena.
+- Der Spieler kann die Bewegungsrichtung seines Kreisels beeinflussen.
+- Die Kreisel können miteinander kollidieren und sich gegenseitig wegstoßen.
+- Durch Kollisionen und die Dauer des Kampfes verlieren die Kreisel Energie.
+- Der gegnerische Kreisel wird vom Computer gesteuert.
+
+**Voraussetzung:** Beide Kreisel befinden sich in der Arena.
+
+**Nachbedingung:** Der Kampf läuft, bis eine Siegbedingung erfüllt ist.
+
+**Geschätzter Aufwand:** Hoch
+
+#### 2.4 Gewinner ermitteln
+
+**User Story:** Als Spieler möchte ich erkennen können, wann ein Kampf beendet ist und wer gewonnen hat.
+
+**Anforderungen:**
+- Ein Kreisel verliert, wenn seine Energie auf null sinkt oder er die Arena verlässt.
+- Das Spiel erkennt automatisch das Kampfende.
+- Der Gewinner wird angezeigt.
+- Der Spieler kann eine neue Runde starten oder zum Hauptmenü zurückkehren.
+
+**Voraussetzung:** Ein Kampf wurde gestartet.
+
+**Nachbedingung:** Das Spielergebnis wird angezeigt.
+
+**Geschätzter Aufwand:** Niedrig
+
+### 3. Nicht-funktionale Anforderungen
+
+- **Benutzerfreundlichkeit:** Das Spiel soll einfach und intuitiv bedienbar sein.
+- **Leistung:** Bewegungen und Kollisionen sollen flüssig dargestellt werden.
+- **Zuverlässigkeit:** Das Spiel soll stabil und möglichst fehlerfrei laufen.
+- **Wartbarkeit:** Der Code soll übersichtlich aufgebaut sein, damit weitere Funktionen ergänzt werden können.
+
+### 4. Technische Einschränkungen
+
+- Das Spiel wird zunächst als 2D-Anwendung entwickelt.
+- Die Programmiersprache und Entwicklungsumgebung werden noch festgelegt.
+- Die Versionsverwaltung erfolgt über GitHub.
+- Zunächst wird ein spielbarer Prototyp entwickelt.
