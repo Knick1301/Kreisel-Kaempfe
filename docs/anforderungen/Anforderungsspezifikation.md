@@ -16,7 +16,7 @@ Dieses Dokument beschreibt die funktionalen und nicht-funktionalen Anforderungen
 - **UI:** User Interface (Benutzeroberfläche).
 
 #### 1.4 Referenzen
--
+N.N.
 ### 2. Funktionale Anforderungen
 
 #### 2.1 Übersicht
@@ -30,7 +30,7 @@ Die drei wesentlichen Anwendungsfälle sind:
 - **Kampf beenden und erneut spielen:** Nach dem Kampf wird der Gewinner angezeigt und eine neue Runde kann gestartet werden.
 
 **UML-Anwendungsfalldiagramm:**
-![UML-Anwendungsfalldiagramm](anforderungen/Anwendungsfalldiagramm.png)
+![UML-Anwendungsfalldiagramm](Anwendungsfalldiagramm.png)
 
 #### 2.2 Kreisel auswählen und Kampf starten
 
@@ -45,7 +45,7 @@ Die drei wesentlichen Anwendungsfälle sind:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Mittel
 
-![Hauptmenü](images/Starten.png)
+![Hauptmenü](Starten.png)
 
 #### 2.3 Kreiselkämpfe durchführen
 
@@ -61,7 +61,7 @@ Die drei wesentlichen Anwendungsfälle sind:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Hoch
 
-![Kampfarena](images/Arena.png)
+![Kampfarena](Arena.png)
 
 #### 2.4 Kampf beenden und erneut spielen
 
@@ -76,7 +76,7 @@ Die drei wesentlichen Anwendungsfälle sind:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Niedrig
 
-![Ergebnisanzeige](images/Ergebnis.png)
+![Ergebnisanzeige](Ergebnis.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
