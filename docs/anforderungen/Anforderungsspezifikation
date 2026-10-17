@@ -29,6 +29,8 @@ Die drei wesentlichen Anwendungsfälle sind:
 - **Kreiselkampf durchführen:** Der Spieler steuert seinen Kreisel und versucht, den gegnerischen Kreisel zu besiegen.
 - **Kampf beenden und erneut spielen:** Nach dem Kampf wird der Gewinner angezeigt und eine neue Runde kann gestartet werden.
 
+**UML-Anwendungsfalldiagramm:**
+![UML-Anwendungsfalldiagramm](images/Anwendungsfalldiagramm.png)
 
 #### 2.2 Kreisel auswählen und Kampf starten
 
