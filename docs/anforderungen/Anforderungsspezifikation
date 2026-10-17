@@ -45,6 +45,8 @@ Die drei wesentlichen Anwendungsfälle sind:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Mittel
 
+![Hauptmenü](images/Starten.png)
+
 #### 2.3 Kreiselkämpfe durchführen
 
 **Als Spieler** möchte ich meinen Kreisel während eines Kampfes steuern und mit dem gegnerischen Kreisel zusammenstoßen können, um den Kampf aktiv zu beeinflussen und meinen Gegner zu besiegen.
@@ -59,6 +61,8 @@ Die drei wesentlichen Anwendungsfälle sind:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Hoch
 
+![Kampfarena](images/Arena.png)
+
 #### 2.4 Kampf beenden und erneut spielen
 
 **Als Spieler** möchte ich nach einem Kampf das Ergebnis sehen und eine neue Runde starten können, um mehrere Kämpfe hintereinander spielen zu können.
@@ -72,6 +76,7 @@ Die drei wesentlichen Anwendungsfälle sind:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Niedrig
 
+![Ergebnisanzeige](images/Ergebnis.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
