@@ -44,39 +44,6 @@ Die wichtigsten Funktionen sind:
 
 **Geschätzter Aufwand:** Mittel
 
-#### 2.3 Kampfmechanik
-
-**User Story:** Als Spieler möchte ich meinen Kreisel steuern und gegen einen Gegner kämpfen.
-
-**Anforderungen:**
-- Zwei Kreisel bewegen sich in einer begrenzten Arena.
-- Der Spieler kann die Bewegungsrichtung seines Kreisels beeinflussen.
-- Die Kreisel können miteinander kollidieren und sich gegenseitig wegstoßen.
-- Durch Kollisionen und die Dauer des Kampfes verlieren die Kreisel Energie.
-- Der gegnerische Kreisel wird vom Computer gesteuert.
-
-**Voraussetzung:** Beide Kreisel befinden sich in der Arena.
-
-**Nachbedingung:** Der Kampf läuft, bis eine Siegbedingung erfüllt ist.
-
-**Geschätzter Aufwand:** Hoch
-
-#### 2.4 Gewinner ermitteln
-
-**User Story:** Als Spieler möchte ich erkennen können, wann ein Kampf beendet ist und wer gewonnen hat.
-
-**Anforderungen:**
-- Ein Kreisel verliert, wenn seine Energie auf null sinkt oder er die Arena verlässt.
-- Das Spiel erkennt automatisch das Kampfende.
-- Der Gewinner wird angezeigt.
-- Der Spieler kann eine neue Runde starten oder zum Hauptmenü zurückkehren.
-
-**Voraussetzung:** Ein Kampf wurde gestartet.
-
-**Nachbedingung:** Das Spielergebnis wird angezeigt.
-
-**Geschätzter Aufwand:** Niedrig
-
 ### 3. Nicht-funktionale Anforderungen
 
 - **Benutzerfreundlichkeit:** Das Spiel soll einfach und intuitiv bedienbar sein.
