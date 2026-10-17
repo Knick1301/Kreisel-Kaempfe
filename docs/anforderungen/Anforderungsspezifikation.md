@@ -30,7 +30,7 @@ Die drei wesentlichen Anwendungsfälle sind:
 - **Kampf beenden und erneut spielen:** Nach dem Kampf wird der Gewinner angezeigt und eine neue Runde kann gestartet werden.
 
 **UML-Anwendungsfalldiagramm:**
-![UML-Anwendungsfalldiagramm](Anwendungsfalldiagramm.png)
+![UML-Anwendungsfalldiagramm](Anwendunsfalldiagramm.png)
 
 #### 2.2 Kreisel auswählen und Kampf starten
 
