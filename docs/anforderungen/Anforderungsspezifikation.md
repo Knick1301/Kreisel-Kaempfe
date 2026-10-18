@@ -23,14 +23,13 @@ N.N.
 
 In Kreiselkämpfe treten zwei Kreisel in einer Arena gegeneinander an. Die Kreisel besitzen unterschiedliche Eigenschaften und verlieren während des Kampfes Energie.
 
-Die drei wesentlichen Anwendungsfälle sind:
+Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 
-- **Kreisel auswählen und Kampf starten:** Der Spieler wählt einen Kreisel mit bestimmten Eigenschaften aus und beginnt einen Kampf.
-- **Kreiselkampf durchführen:** Der Spieler steuert seinen Kreisel und versucht, den gegnerischen Kreisel zu besiegen.
-- **Kampf beenden und erneut spielen:** Nach dem Kampf wird der Gewinner angezeigt und eine neue Runde kann gestartet werden.
+- **Kreisel zusammenstellen:** Der Spieler wählt einen Kreisel mit bestimmten Eigenschaften aus mit dem er den Kampf bestreiten will.
+- **Online-Kampf bestreiten:** Der Spieler steuert seinen Kreisel und versucht, den gegnerischen Kreisel zu besiegen.
 
 **UML-Anwendungsfalldiagramm:**
-![UML-Anwendungsfalldiagramm](Anwendunsfalldiagram.png)
+![UML-Anwendungsfalldiagramm](architektur/use-case.diagramm.png)
 
 #### 2.2 Kreisel auswählen und Kampf starten
 
