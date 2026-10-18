@@ -49,7 +49,7 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 
 **Akzeptanzkriterien:**
 - Kreisel wird korrekt konfiguriert in den Kampf übernommen
-- Gegnersuche dauert max 30 Sekunden
+- Gegnerzuweisung dauert max 20 Sekunden
 - Ergebnis wird gespeichert und ist einsehbar
   
 
