@@ -31,12 +31,11 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 **UML-Anwendungsfalldiagramm:**
 ![UML-Anwendungsfalldiagramm](..architektur/use-case-diagramm.png)
 
-#### 2.2 Kreisel auswählen und Kampf starten
+#### 2.2 Kreisel zusammenstellen *(inkl. Einzelteile wählen + Kreiselwerte anzeigen)*
 
-**Als Spieler** möchte ich vor einem Kampf einen Kreisel auswählen können, um mit unterschiedlichen Eigenschaften gegen einen Gegner anzutreten.
+**Als Spieler** möchte ich vor einem Kampf einen Kreisel auswählen und konfigurieren können, um mit unterschiedlichen Eigenschaften gegen einen Gegner anzutreten.
 
 **Akzeptanzkriterien:**
-- Im Hauptmenü kann ein neuer Kampf gestartet werden.
 - Es stehen mindestens zwei unterschiedliche Kreisel zur Auswahl.
 - Die Eigenschaften der Kreisel (z. B. Angriff, Geschwindigkeit und Ausdauer) werden angezeigt.
 - Nach der Auswahl startet der Kampf mit dem gewählten Kreisel.
@@ -44,38 +43,19 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Mittel
 
-![Hauptmenü](Starten.png)
+#### 2.3 Online-Kampf bestreiten
 
-#### 2.3 Kreiselkämpfe durchführen
-
-**Als Spieler** möchte ich meinen Kreisel während eines Kampfes steuern und mit dem gegnerischen Kreisel zusammenstoßen können, um den Kampf aktiv zu beeinflussen und meinen Gegner zu besiegen.
+**Als Spieler** möchte ich mit meinem Kreisel einen Gegner finden und dass anschließend das Ergebnis des Kampfes gespeichert wird.
 
 **Akzeptanzkriterien:**
-- Zwei Kreisel bewegen sich innerhalb einer begrenzten Arena.
-- Der Spieler kann die Bewegungsrichtung seines Kreisels beeinflussen.
-- Der gegnerische Kreisel wird automatisch gesteuert.
-- Bei Zusammenstößen reagieren die Kreisel aufeinander und verlieren gegebenenfalls Energie.
-- Die verbleibende Energie beider Kreisel wird angezeigt.
+- Kreisel wird korrekt konfiguriert in den Kampf übernommen
+- Gegnersuche dauert max 30 Sekunden
+- Ergebnis wird gespeichert und ist einsehbar
+  
 
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Hoch
 
-![Kampfarena](Arena.png)
-
-#### 2.4 Kampf beenden und erneut spielen
-
-**Als Spieler** möchte ich nach einem Kampf das Ergebnis sehen und eine neue Runde starten können, um mehrere Kämpfe hintereinander spielen zu können.
-
-**Akzeptanzkriterien:**
-- Der Kampf endet, sobald die Energie eines Kreisels auf null sinkt oder er die Arena verlässt.
-- Das Spiel erkennt automatisch den Gewinner.
-- Das Ergebnis wird auf dem Bildschirm angezeigt.
-- Der Spieler kann einen neuen Kampf starten oder zum Hauptmenü zurückkehren.
-
-**Priorität:** Hoch  
-**Geschätzter Aufwand:** Niedrig
-
-![Ergebnisanzeige](Ergebnis.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
