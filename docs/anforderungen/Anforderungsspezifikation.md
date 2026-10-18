@@ -26,7 +26,7 @@ In Kreiselkämpfe treten zwei Kreisel in einer Arena gegeneinander an. Die Kreis
 Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 
 - **Kreisel zusammenstellen:** Der Spieler wählt einen Kreisel mit bestimmten Eigenschaften aus mit dem er den Kampf bestreiten will.
-- **Online-Kampf bestreiten:** Der Spieler steuert seinen Kreisel und versucht, den gegnerischen Kreisel zu besiegen.
+- **Online-Kampf bestreiten:** Dem Spieler wird ein Gegner zugewiesen und das Ergebnis des Kampfes gespeichert.
 
 **UML-Anwendungsfalldiagramm:**
 ![UML-Anwendungsfalldiagramm](../architektur/use-case-diagramm.png)
