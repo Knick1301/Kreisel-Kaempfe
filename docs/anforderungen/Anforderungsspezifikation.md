@@ -29,7 +29,7 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 - **Online-Kampf bestreiten:** Der Spieler steuert seinen Kreisel und versucht, den gegnerischen Kreisel zu besiegen.
 
 **UML-Anwendungsfalldiagramm:**
-![UML-Anwendungsfalldiagramm](..architektur/use-case-diagramm.png)
+![UML-Anwendungsfalldiagramm](../architektur/use-case-diagramm.png)
 
 #### 2.2 Kreisel zusammenstellen *(inkl. Einzelteile wählen + Kreiselwerte anzeigen)*
 
