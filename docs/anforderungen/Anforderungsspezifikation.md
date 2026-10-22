@@ -74,7 +74,7 @@ Das Aktivitätsdiagramm zeigt die Ablaufmöglichkeiten bei der Erstellung eines 
 **Aktivitätsdiagramm:**
 Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schlüsseloperationen sind die Prüfung der Daten (falls nein Rückkehr zur Blankoeingabe; falls ja Erstellung des Kontos + Bestätigung.
 
-![Aktivitätsdiagramm](../architektur/aktivitätsdiagramme/Registrieren.drawio.png)
+![Aktivitätsdiagramm](../architektur/aktivitätsdiagramme/Registrierung_Aktivitätsdiagramm-AD1 - Registrieren.drawio.png)
 
 #### 2.5 Kreiselkomponente auswählen
 **Als Spieler** möchte ich bei der Erstellung eines Kreisels eine Komponente auswählen können und diese daraufhin korrekt an meinem Kreisel implementiert sehen. 
