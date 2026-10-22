@@ -51,7 +51,7 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 Das Aktivitätsdiagramm zeigt die Ablaufmöglichkeiten bei der Erstellung eines Kreisels. Zunächst öffnet der Spieler den Baukasten, um dann Einzelteile zu wählen, bis der Kreisel vollständig konfiguriert ist. Danach wird der Kreisel benannt und gespeichert und der Nutzer hat die Möglichkeit einen weiteren zu erstellen. Hier wird in der Darstellung zusätzlich zwischen Spieler und System unterschieden, was eine bessere Verständlichkeit ermöglichen soll.
 
 **UML-Anwendungsfalldiagramm:**
-![UML-Anwendungsfalldiagramm](../architektur/Kreisel-erstellen.png)
+![Aktivitätsdiagramm](../architektur/aktivitätsdiagramme/Kreisel-erstellen.png)
 
 #### 2.3 Online-Kampf bestreiten
 
