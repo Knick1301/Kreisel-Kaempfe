@@ -50,7 +50,6 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 **Aktivitätsdiagramm:**
 Das Aktivitätsdiagramm zeigt die Ablaufmöglichkeiten bei der Erstellung eines Kreisels. Zunächst öffnet der Spieler den Baukasten, um dann Einzelteile zu wählen, bis der Kreisel vollständig konfiguriert ist. Danach wird der Kreisel benannt und gespeichert und der Nutzer hat die Möglichkeit einen weiteren zu erstellen. Hier wird in der Darstellung zusätzlich zwischen Spieler und System unterschieden, was eine bessere Verständlichkeit ermöglichen soll.
 
-**UML-Anwendungsfalldiagramm:**
 ![Aktivitätsdiagramm](../architektur/aktivitätsdiagramme/Kreisel-erstellen.png)
 
 #### 2.3 Online-Kampf bestreiten
@@ -75,7 +74,7 @@ Das Aktivitätsdiagramm zeigt die Ablaufmöglichkeiten bei der Erstellung eines 
 **Aktivitätsdiagramm:**
 Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schlüsseloperationen sind die Prüfung der Daten (falls nein Rückkehr zur Blankoeingabe; falls ja Erstellung des Kontos + Bestätigung.
 
-![UML-Anwendungsfalldiagramm](../aktivitätsdiagramme/Registrieren.drawio.png)
+![Aktivitätsdiagramm](../architektur/aktivitätsdiagramme/Registrieren.drawio.png)
 
 #### 2.5 Kreiselkomponente auswählen
 **Als Spieler** möchte ich bei der Erstellung eines Kreisels eine Komponente auswählen können und diese daraufhin korrekt an meinem Kreisel implementiert sehen. 
@@ -88,8 +87,7 @@ Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schl
 **Sequenzdiagramm:**
 Das Sequenzdiagramm zeigt, wie der Ablauf bei der Auswahl einer Komponente funktionieren soll. Zunächst wählt der Spieler eine Komponente aus dem Baukasten. Diese Auswahl wird dann in der Datenbank verarbeitet und die Komponente wird "returned"/freigegeben. Daraufhin wird sie dem Nutzer angezeigt.
 
-**UML-Anwendungsfalldiagramm:**
-![UML-Anwendungsfalldiagramm](../architektur/Sequenzdiagramm_Kreiselkomponente.drawio.png)
+![Aktivitätsdiagramm](../architektur/sequenzdiagramme/Sequenzdiagramm_Kreiselkomponente.drawio.png)
 
 #### 2.6 Erstellung einer Lobby
 **Als Spieler** möchte ich eine neue Lobby erstellen bzw. einer bestehenden beitreten können.
@@ -108,8 +106,7 @@ Das Sequenzdiagramm „Lobby erstellen“ zeigt folgenden Ablauf:
 5. Lobby anzeigen: Der Spieler erhält eine Bestätigung und sieht die erstellte Lobby im Wartezustand.
  Das Diagramm beschreibt, wie ein Spieler eine neue Lobby erstellt und anschließend auf weitere Mitspieler wartet.
 
-**UML-Anwendungsfalldiagramm:**
-![UML-Anwendungsfalldiagramm](../architektur/Sequenzdiagramm_Lobby_erstellen_finden.drawio.png)
+![Aktivitätsdiagramm](../architektur/sequenzdiagramme/Sequenzdiagramm_Lobby_erstellen_finden.drawio.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
