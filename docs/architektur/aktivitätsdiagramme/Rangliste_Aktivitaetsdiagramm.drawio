@@ -1,0 +1,96 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Rangliste ansehen" id="rangliste">
+    <mxGraphModel dx="1200" dy="760" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1240" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Aktivitätsdiagramm · Rangliste ansehen" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=17;fontColor=#1F2430;" vertex="1" parent="1">
+          <mxGeometry x="30" y="20" width="1160" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="laneSpieler" value="Spieler" style="swimlane;html=1;startSize=44;horizontal=1;collapsible=0;fillColor=none;strokeColor=#C9CED6;fontStyle=1;fontSize=15;fontColor=#1F2430;" vertex="1" parent="1">
+          <mxGeometry x="30" y="70" width="400" height="640" as="geometry" />
+        </mxCell>
+        <mxCell id="laneSystem" value="System" style="swimlane;html=1;startSize=44;horizontal=1;collapsible=0;fillColor=none;strokeColor=#C9CED6;fontStyle=1;fontSize=15;fontColor=#1F2430;" vertex="1" parent="1">
+          <mxGeometry x="430" y="70" width="760" height="640" as="geometry" />
+        </mxCell>
+
+        <!-- Spieler -->
+        <mxCell id="start" value="" style="ellipse;html=1;fillColor=#1F2430;strokeColor=#1F2430;" vertex="1" parent="laneSpieler">
+          <mxGeometry x="177" y="67" width="26" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="oeffnen" value="Rangliste öffnen" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#EEF2FA;strokeColor=#3A5FA0;fontSize=13;fontColor=#1F2430;" vertex="1" parent="laneSpieler">
+          <mxGeometry x="90" y="128" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="platzierung" value="Eigene Platzierung ansehen" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#EEF2FA;strokeColor=#3A5FA0;fontSize=13;fontColor=#1F2430;" vertex="1" parent="laneSpieler">
+          <mxGeometry x="58" y="398" width="262" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="merge" value="" style="rhombus;html=1;fillColor=#FFFFFF;strokeColor=#3A5FA0;" vertex="1" parent="laneSpieler">
+          <mxGeometry x="170" y="490" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ende" value="" style="ellipse;html=1;shape=endState;fillColor=#1F2430;strokeColor=#1F2430;" vertex="1" parent="laneSpieler">
+          <mxGeometry x="176" y="576" width="28" height="28" as="geometry" />
+        </mxCell>
+
+        <!-- System -->
+        <mxCell id="laden" value="Kampfergebnisse aus Datenbank laden" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#EEF2FA;strokeColor=#3A5FA0;fontSize=13;fontColor=#1F2430;" vertex="1" parent="laneSystem">
+          <mxGeometry x="41" y="128" width="338" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="entscheidung" value="Ergebnisse vorhanden?" style="rhombus;html=1;fillColor=#FFFFFF;strokeColor=#3A5FA0;labelPosition=left;verticalLabelPosition=middle;align=right;verticalAlign=middle;fontSize=13;fontColor=#5A6070;spacingRight=8;" vertex="1" parent="laneSystem">
+          <mxGeometry x="190" y="220" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="sortieren" value="Spieler nach Siegen sortieren" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#EEF2FA;strokeColor=#3A5FA0;fontSize=13;fontColor=#1F2430;" vertex="1" parent="laneSystem">
+          <mxGeometry x="66" y="308" width="288" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="hinweis" value="Hinweis „Noch keine Kämpfe“ anzeigen" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#EEF2FA;strokeColor=#3A5FA0;fontSize=13;fontColor=#1F2430;" vertex="1" parent="laneSystem">
+          <mxGeometry x="387" y="308" width="346" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="anzeigen" value="Rangliste anzeigen" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#EEF2FA;strokeColor=#3A5FA0;fontSize=13;fontColor=#1F2430;" vertex="1" parent="laneSystem">
+          <mxGeometry x="110" y="398" width="200" height="44" as="geometry" />
+        </mxCell>
+
+        <!-- Kanten -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;" edge="1" parent="1" source="start" target="oeffnen">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;" edge="1" parent="1" source="oeffnen" target="laden">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;" edge="1" parent="1" source="laden" target="entscheidung">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="[ja]" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;fontSize=13;labelBackgroundColor=none;align=left;spacingLeft=6;" edge="1" parent="1" source="entscheidung" target="sortieren">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="[nein]" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;fontSize=13;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="entscheidung" target="hinweis">
+          <mxGeometry x="-0.85" y="14" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="990" y="310" />
+            </Array>
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;" edge="1" parent="1" source="sortieren" target="anzeigen">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="anzeigen" target="platzierung">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;" edge="1" parent="1" source="platzierung" target="merge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="hinweis" target="merge">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="990" y="580" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=open;endFill=0;endSize=10;strokeColor=#2B2F38;" edge="1" parent="1" source="merge" target="ende">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
