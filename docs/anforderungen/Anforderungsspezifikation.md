@@ -28,6 +28,11 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 - **Kreisel zusammenstellen:** Der Spieler wählt einen Kreisel mit bestimmten Eigenschaften aus mit dem er den Kampf bestreiten will.
 - **Online-Kampf bestreiten:** Dem Spieler wird ein Gegner zugewiesen und das Ergebnis des Kampfes gespeichert.
 
+  Nun werden weitere Anwendungsfälle mit Aktivitäts- bzw. Sequenzdiagramm ergänzt (Update 22.10.):
+- **Kreisel zusammenstellen:** Update mit Aktivitätsdiagramm
+- **Registrierung:**
+- **Rangliste:**
+
 **UML-Anwendungsfalldiagramm:**
 ![UML-Anwendungsfalldiagramm](../architektur/use-case-diagramm.png)
 
@@ -56,6 +61,19 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 **Priorität:** Hoch  
 **Geschätzter Aufwand:** Hoch
 
+#### 2.4 Registrierung
+**Als Spieler** möchte ich einen funktionierenden Account erstellen können.
+
+**Akzeptanzkriterien:**
+- Fehlermeldung bei falscher Eingabe wird angezeigt
+- Felder lassen sich in der Anwendung ausfüllen
+- Konto in der Datenbank
+- Bestätigung ausgesandt
+
+**Aktivitätsdiagramm:**
+Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schlüsseloperationen sind die Prüfung der Daten (falls nein Rückkehr zur Blankoeingabe; falls ja Erstellung des Kontos + Bestätigung.
+
+![UML-Anwendungsfalldiagramm](../architektur/aktivitätsdiagramme/Registrierung_Aktivitätsdiagramm-AD1 - Registrieren.drawio.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
