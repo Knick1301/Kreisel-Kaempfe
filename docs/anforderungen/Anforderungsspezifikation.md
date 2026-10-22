@@ -30,8 +30,10 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 
   Nun werden weitere Anwendungsfälle mit Aktivitäts- bzw. Sequenzdiagramm ergänzt (Update 22.10.):
 - **Kreisel zusammenstellen:** Update mit Aktivitätsdiagramm
-- **Registrierung:**
-- **Rangliste:**
+- **Registrierung:** Aufnahme eines Nutzerprofils mit Kontodaten
+- **Kreiselkomponente auswählen:** Auswahl und korrekte Ausgabe einer Komponente
+- **Lobbyerstellung:** Erstellung und Beitreten zu einer Lobby
+-  **Rangliste:**
 
 **UML-Anwendungsfalldiagramm:**
 ![UML-Anwendungsfalldiagramm](../architektur/use-case-diagramm.png)
@@ -45,8 +47,11 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 - Die Eigenschaften der Kreisel (z. B. Angriff, Geschwindigkeit und Ausdauer) werden angezeigt.
 - Nach der Auswahl startet der Kampf mit dem gewählten Kreisel.
 
-**Priorität:** Hoch  
-**Geschätzter Aufwand:** Mittel
+**Aktivitätsdiagramm:**
+Das Aktivitätsdiagramm zeigt die Ablaufmöglichkeiten bei der Erstellung eines Kreisels. Zunächst öffnet der Spieler den Baukasten, um dann Einzelteile zu wählen, bis der Kreisel vollständig konfiguriert ist. Danach wird der Kreisel benannt und gespeichert und der Nutzer hat die Möglichkeit einen weiteren zu erstellen. Hier wird in der Darstellung zusätzlich zwischen Spieler und System unterschieden, was eine bessere Verständlichkeit ermöglichen soll.
+
+**UML-Anwendungsfalldiagramm:**
+![UML-Anwendungsfalldiagramm](../architektur/Kreisel-erstellen.png)
 
 #### 2.3 Online-Kampf bestreiten
 
@@ -57,9 +62,6 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 - Gegnerzuweisung dauert max 20 Sekunden
 - Ergebnis wird gespeichert und ist einsehbar
   
-
-**Priorität:** Hoch  
-**Geschätzter Aufwand:** Hoch
 
 #### 2.4 Registrierung
 **Als Spieler** möchte ich einen funktionierenden Account erstellen können.
@@ -74,6 +76,40 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schlüsseloperationen sind die Prüfung der Daten (falls nein Rückkehr zur Blankoeingabe; falls ja Erstellung des Kontos + Bestätigung.
 
 ![UML-Anwendungsfalldiagramm](../aktivitätsdiagramme/Registrieren.drawio.png)
+
+#### 2.5 Kreiselkomponente auswählen
+**Als Spieler** möchte ich bei der Erstellung eines Kreisels eine Komponente auswählen können und diese daraufhin korrekt an meinem Kreisel implementiert sehen. 
+
+**Akzeptanzkriterien:**
+- Komponente kann ausgewählt werdne
+- Komponente wird korrekt übertragen
+- Ausgewählte Komponente wird angezeigt
+
+**Sequenzdiagramm:**
+Das Sequenzdiagramm zeigt, wie der Ablauf bei der Auswahl einer Komponente funktionieren soll. Zunächst wählt der Spieler eine Komponente aus dem Baukasten. Diese Auswahl wird dann in der Datenbank verarbeitet und die Komponente wird "returned"/freigegeben. Daraufhin wird sie dem Nutzer angezeigt.
+
+**UML-Anwendungsfalldiagramm:**
+![UML-Anwendungsfalldiagramm](../architektur/Sequenzdiagramm_Kreiselkomponente.drawio.png)
+
+#### 2.6 Erstellung einer Lobby
+**Als Spieler** möchte ich eine neue Lobby erstellen bzw. einer bestehenden beitreten können.
+
+**Akzeptanzkriterien:**
+- Der Spieler kann eine neue Lobby erstellen und ihr einen Namen geben.
+- Das System erstellt die Lobby und weist ihr eine eindeutige Lobby-ID zu.
+- Nach erfolgreicher Erstellung wird dem Spieler die Lobby angezeigt, in der er auf weitere Mitspieler warten kann.
+
+**Sequenzdiagramm:**
+Das Sequenzdiagramm „Lobby erstellen“ zeigt folgenden Ablauf:
+1. Lobby erstellen: Der Spieler gibt einen Namen für die Lobby ein.
+2. Anfrage weiterleiten: Die Lobby-UI übermittelt die Anfrage an die Lobby-Verwaltung.
+3. Lobby erzeugen: Die Lobby-Verwaltung erstellt eine neue Lobby mit der Spieler-ID.
+4. Bestätigung: Die erstellte Lobby gibt ihre Lobby-ID zurück.
+5. Lobby anzeigen: Der Spieler erhält eine Bestätigung und sieht die erstellte Lobby im Wartezustand.
+ Das Diagramm beschreibt, wie ein Spieler eine neue Lobby erstellt und anschließend auf weitere Mitspieler wartet.
+
+**UML-Anwendungsfalldiagramm:**
+![UML-Anwendungsfalldiagramm](../architektur/Sequenzdiagramm_Lobby_erstellen_finden.drawio.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
