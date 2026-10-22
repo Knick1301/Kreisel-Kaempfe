@@ -73,7 +73,7 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 **Aktivitätsdiagramm:**
 Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schlüsseloperationen sind die Prüfung der Daten (falls nein Rückkehr zur Blankoeingabe; falls ja Erstellung des Kontos + Bestätigung.
 
-![UML-Anwendungsfalldiagramm](../architektur/aktivitätsdiagramme/Registrierung_Aktivitätsdiagramm-AD1 - Registrieren.drawio.png)
+![UML-Anwendungsfalldiagramm](../aktivitätsdiagramme/Registrieren.drawio.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
