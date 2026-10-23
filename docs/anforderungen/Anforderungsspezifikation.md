@@ -33,7 +33,7 @@ Zunächst wird auf 2 wesentliche Funktionen eingegangen:
 - **Registrierung:** Aufnahme eines Nutzerprofils mit Kontodaten
 - **Kreiselkomponente auswählen:** Auswahl und korrekte Ausgabe einer Komponente
 - **Lobbyerstellung:** Erstellung und Beitreten zu einer Lobby
--  **Rangliste:**
+- **Rangliste:** Anzeige der Spieler sortiert nach Siegen inkl. eigener Platzierung
 
 **UML-Anwendungsfalldiagramm:**
 ![UML-Anwendungsfalldiagramm](../architektur/use-case-diagramm.png)
@@ -63,7 +63,7 @@ Das Aktivitätsdiagramm zeigt die Ablaufmöglichkeiten bei der Erstellung eines 
   
 
 #### 2.4 Registrierung
-**Als Spieler** möchte ich einen funktionierenden Account erstellen können.
+**Als Gast** möchte ich einen funktionierenden Account erstellen können.
 
 **Akzeptanzkriterien:**
 - Fehlermeldung bei falscher Eingabe wird angezeigt
@@ -72,7 +72,7 @@ Das Aktivitätsdiagramm zeigt die Ablaufmöglichkeiten bei der Erstellung eines 
 - Bestätigung ausgesandt
 
 **Aktivitätsdiagramm:**
-Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schlüsseloperationen sind die Prüfung der Daten (falls nein Rückkehr zur Blankoeingabe; falls ja Erstellung des Kontos + Bestätigung.
+Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schlüsseloperationen sind die Prüfung der Daten (falls nein Rückkehr zur Blankoeingabe; falls ja Erstellung des Kontos + Bestätigung).
 
 ![Aktivitätsdiagramm](../architektur/aktivitätsdiagramme/Registrieren.drawio.png)
 
@@ -80,14 +80,14 @@ Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schl
 **Als Spieler** möchte ich bei der Erstellung eines Kreisels eine Komponente auswählen können und diese daraufhin korrekt an meinem Kreisel implementiert sehen. 
 
 **Akzeptanzkriterien:**
-- Komponente kann ausgewählt werdne
+- Komponente kann ausgewählt werden
 - Komponente wird korrekt übertragen
 - Ausgewählte Komponente wird angezeigt
 
 **Sequenzdiagramm:**
 Das Sequenzdiagramm zeigt, wie der Ablauf bei der Auswahl einer Komponente funktionieren soll. Zunächst wählt der Spieler eine Komponente aus dem Baukasten. Diese Auswahl wird dann in der Datenbank verarbeitet und die Komponente wird "returned"/freigegeben. Daraufhin wird sie dem Nutzer angezeigt.
 
-![Aktivitätsdiagramm](../architektur/sequenzdiagramme/Sequenzdiagramm_Kreiselkomponente.drawio.png)
+![Sequenzdiagramm Kreiselkomponente](../architektur/sequenzdiagramme/Sequenzdiagramm_Kreiselkomponente.drawio.png)
 
 #### 2.6 Erstellung einer Lobby
 **Als Spieler** möchte ich eine neue Lobby erstellen bzw. einer bestehenden beitreten können.
@@ -96,6 +96,7 @@ Das Sequenzdiagramm zeigt, wie der Ablauf bei der Auswahl einer Komponente funkt
 - Der Spieler kann eine neue Lobby erstellen und ihr einen Namen geben.
 - Das System erstellt die Lobby und weist ihr eine eindeutige Lobby-ID zu.
 - Nach erfolgreicher Erstellung wird dem Spieler die Lobby angezeigt, in der er auf weitere Mitspieler warten kann.
+- Der Spieler kann eine Liste offener Lobbys einsehen und einer davon beitreten.
 
 **Sequenzdiagramm:**
 Das Sequenzdiagramm „Lobby erstellen“ zeigt folgenden Ablauf:
@@ -104,15 +105,33 @@ Das Sequenzdiagramm „Lobby erstellen“ zeigt folgenden Ablauf:
 3. Lobby erzeugen: Die Lobby-Verwaltung erstellt eine neue Lobby mit der Spieler-ID.
 4. Bestätigung: Die erstellte Lobby gibt ihre Lobby-ID zurück.
 5. Lobby anzeigen: Der Spieler erhält eine Bestätigung und sieht die erstellte Lobby im Wartezustand.
- Das Diagramm beschreibt, wie ein Spieler eine neue Lobby erstellt und anschließend auf weitere Mitspieler wartet.
 
-![Aktivitätsdiagramm](../architektur/sequenzdiagramme/Sequenzdiagramm_Lobby_erstellen_finden.drawio.png)
+Über ein alt-Fragment zeigt das Diagramm zusätzlich den alternativen Ablauf „Lobby suchen“: Der Spieler lässt sich offene Lobbys anzeigen, wählt eine aus und tritt bei. Der Host der Lobby wird über den neuen Mitspieler benachrichtigt.
+
+![Sequenzdiagramm Lobby](../architektur/sequenzdiagramme/Sequenzdiagramm_Lobby_erstellen_finden.drawio.png)
+
+#### 2.7 Rangliste ansehen
+**Als Spieler** möchte ich die Rangliste ansehen können, um zu sehen, wie ich im Vergleich zu anderen Spielern abschneide.
+
+**Akzeptanzkriterien:**
+- Die Spieler werden nach Anzahl ihrer Siege sortiert angezeigt.
+- Der Spieler sieht seine eigene Platzierung.
+- Gibt es noch keine Kampfergebnisse, wird der Hinweis „Noch keine Kämpfe“ angezeigt.
+
+**Aktivitätsdiagramm:**
+Das Aktivitätsdiagramm zeigt den Ablauf beim Öffnen der Rangliste. Der Spieler öffnet die Rangliste, woraufhin das System die gespeicherten Kampfergebnisse aus der Datenbank lädt. Sind Ergebnisse vorhanden, werden die Spieler nach Siegen sortiert und die Rangliste angezeigt, sodass der Spieler seine eigene Platzierung sehen kann. Sind noch keine Ergebnisse vorhanden, erscheint der Hinweis „Noch keine Kämpfe“. Die Rangliste baut damit auf den Ergebnissen auf, die beim Anwendungsfall „Online-Kampf bestreiten“ (2.3) gespeichert werden.
+
+![Aktivitätsdiagramm Rangliste ansehen](../architektur/aktivitätsdiagramme/Rangliste-Aktivitätsdiagramm.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
-- **Benutzerfreundlichkeit:** Das Spiel soll einfach und intuitiv bedienbar sein.
-- **Zuverlässigkeit:** Das Spiel soll stabil und möglichst fehlerfrei laufen.
+- **Benutzerfreundlichkeit:** Das Spiel soll einfach und intuitiv bedienbar sein. Ein neuer Spieler soll ohne Anleitung innerhalb von 5 Minuten seinen ersten Kreisel zusammenstellen können.
+- **Zuverlässigkeit:** Das Spiel soll stabil und möglichst fehlerfrei laufen. Bricht die Verbindung während eines Kampfes ab, darf das Spiel nicht abstürzen und der Spieler erhält eine Fehlermeldung.
+- **Performance:** Seiten wie Baukasten und Rangliste laden in unter 2 Sekunden. Die Gegnerzuweisung dauert maximal 20 Sekunden.
+- **Kompatibilität:** Das Spiel läuft in den aktuellen Versionen von Chrome, Firefox und Edge, ohne dass eine Installation nötig ist.
+- **Sicherheit:** Passwörter werden nicht im Klartext, sondern gehasht in der Datenbank gespeichert.
 
 ### 4. Technische Einschränkungen
 
 - Die Versionsverwaltung erfolgt über GitHub.
+- Das Frontend wird mit Vue.js, das Backend mit Java umgesetzt.
