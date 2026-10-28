@@ -1,0 +1,5 @@
+[
+  { "name": "Schwerring", "modelPath": "spin-tracks/hells-scythe-ratchet.glb", "weight": 45, "defense": 7, "stamina": 3 },
+  { "name": "Orbit",      "modelPath": "spin-tracks/orbit.glb",      "weight": 38, "defense": 2, "stamina": 8 },
+  { "name": "Kern",       "modelPath": "spin-tracks/kern.glb",       "weight": 40, "defense": 5, "stamina": 5 }
+]

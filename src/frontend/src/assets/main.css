@@ -1,0 +1,62 @@
+:root {
+  --bg: #060b17;
+  --bg-header: #0b1730;
+  --surface: #0c1a33;
+  --surface-raised: #10213f;
+  --primary: #1d4a8a;
+  --primary-hover: #2659a6;
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.35);
+  --gold: #d6a93b;
+  --bar-track: #08132a;
+  --text: #e8eefb;
+  --text-muted: #93a4c6;
+  --border: rgba(120, 160, 230, 0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(37, 89, 166, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, rgba(214, 169, 59, 0.06), transparent 60%), var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

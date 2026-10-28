@@ -1,0 +1,5 @@
+[
+  { "name": "Sturmklinge", "modelPath": "fusion-wheels/hells-scythe-blade.glb", "weight": 30, "attack": 7, "defense": 1, "burstResistance": 2 },
+  { "name": "Bollwerk",    "modelPath": "fusion-wheels/bollwerk.glb",    "weight": 36, "attack": 1, "defense": 5, "burstResistance": 4 },
+  { "name": "Wirbel",      "modelPath": "fusion-wheels/wirbel.glb",      "weight": 32, "attack": 3, "defense": 3, "burstResistance": 4 }
+]
