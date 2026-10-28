@@ -1,0 +1,5 @@
+[
+  { "name": "Flach", "modelPath": "tips/hells-scythe-bit.glb", "weight": 4, "stamina": 3, "dash": 8 },
+  { "name": "Nadel", "modelPath": "tips/nadel.glb", "weight": 3, "stamina": 8, "dash": 2 },
+  { "name": "Kugel", "modelPath": "tips/kugel.glb", "weight": 5, "stamina": 5, "dash": 5 }
+]
