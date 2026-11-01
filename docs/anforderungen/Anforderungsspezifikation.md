@@ -85,7 +85,7 @@ Das Aktivitätsdiagramm zeigt den Ablauf eines Registrierungsprozesses. Die Schl
 - Ausgewählte Komponente wird angezeigt
 
 **Sequenzdiagramm:**
-Das Sequenzdiagramm zeigt, wie der Ablauf bei der Auswahl einer Komponente funktionieren soll. Zunächst wählt der Spieler eine Komponente aus dem Baukasten. Diese Auswahl wird dann in der Datenbank verarbeitet und die Komponente wird "returned"/freigegeben. Daraufhin wird sie dem Nutzer angezeigt.
+Das Sequenzdiagramm zeigt am Beispiel eines Fusion Wheels, wie die Auswahl einer Komponente abläuft (Update Woche 4: an die Klassen aus dem Klassenentwurf angepasst). Der Spieler wählt im Baukasten (`BaukastenView`) eine Komponente aus. Die Anfrage geht über den `PartController` an den `PartService`, der die Komponente über das `FusionWheelRepository` aus der Datenbank lädt. Der Controller gibt sie als `PartDto` an die Oberfläche zurück, wo sie dem Spieler angezeigt wird. Spin Track und Tip werden analog über ihre eigenen Repositories geladen.
 
 ![Sequenzdiagramm Kreiselkomponente](../architektur/sequenzdiagramme/Sequenzdiagramm_Kreiselkomponente.drawio.png)
 
@@ -99,14 +99,14 @@ Das Sequenzdiagramm zeigt, wie der Ablauf bei der Auswahl einer Komponente funkt
 - Der Spieler kann eine Liste offener Lobbys einsehen und einer davon beitreten.
 
 **Sequenzdiagramm:**
-Das Sequenzdiagramm „Lobby erstellen“ zeigt folgenden Ablauf:
-1. Lobby erstellen: Der Spieler gibt einen Namen für die Lobby ein.
-2. Anfrage weiterleiten: Die Lobby-UI übermittelt die Anfrage an die Lobby-Verwaltung.
-3. Lobby erzeugen: Die Lobby-Verwaltung erstellt eine neue Lobby mit der Spieler-ID.
-4. Bestätigung: Die erstellte Lobby gibt ihre Lobby-ID zurück.
-5. Lobby anzeigen: Der Spieler erhält eine Bestätigung und sieht die erstellte Lobby im Wartezustand.
+Das Sequenzdiagramm „Lobby erstellen oder suchen“ zeigt folgenden Ablauf (Update Woche 4: an die Klassen aus dem Klassenentwurf angepasst):
+1. Lobby erstellen: Der Spieler gibt in der `LobbyView` einen Namen für die Lobby ein und wählt seinen Kreisel.
+2. Anfrage weiterleiten: Die `LobbyView` übermittelt die Anfrage über den `LobbyController` an den `LobbyService`.
+3. Lobby erzeugen: Der `LobbyService` erstellt eine neue `Lobby` mit dem Spieler als Host und seinem gewählten Kreisel.
+4. Bestätigung: Die neue Lobby inklusive ihrer eindeutigen ID wird an die Oberfläche zurückgegeben.
+5. Lobby anzeigen: Der Spieler sieht die erstellte Lobby im Wartezustand.
 
-Über ein alt-Fragment zeigt das Diagramm zusätzlich den alternativen Ablauf „Lobby suchen“: Der Spieler lässt sich offene Lobbys anzeigen, wählt eine aus und tritt bei. Der Host der Lobby wird über den neuen Mitspieler benachrichtigt.
+Über ein alt-Fragment zeigt das Diagramm zusätzlich den alternativen Ablauf „Lobby suchen“: Der Spieler lässt sich offene Lobbys anzeigen, wählt eine aus und tritt mit seinem Kreisel bei. Der `LobbyService` fügt ihn der Lobby als Gast hinzu und benachrichtigt anschließend den Host asynchron über den neuen Mitspieler.
 
 ![Sequenzdiagramm Lobby](../architektur/sequenzdiagramme/Sequenzdiagramm_Lobby_erstellen_finden.drawio.png)
 
@@ -122,6 +122,11 @@ Das Sequenzdiagramm „Lobby erstellen“ zeigt folgenden Ablauf:
 Das Aktivitätsdiagramm zeigt den Ablauf beim Öffnen der Rangliste. Der Spieler öffnet die Rangliste, woraufhin das System die gespeicherten Kampfergebnisse aus der Datenbank lädt. Sind Ergebnisse vorhanden, werden die Spieler nach Siegen sortiert und die Rangliste angezeigt, sodass der Spieler seine eigene Platzierung sehen kann. Sind noch keine Ergebnisse vorhanden, erscheint der Hinweis „Noch keine Kämpfe“. Die Rangliste baut damit auf den Ergebnissen auf, die beim Anwendungsfall „Online-Kampf bestreiten“ (2.3) gespeichert werden.
 
 ![Aktivitätsdiagramm Rangliste ansehen](../architektur/aktivitätsdiagramme/Rangliste-Aktivitätsdiagramm.png)
+
+**Sequenzdiagramm:**
+Das Sequenzdiagramm setzt das Aktivitätsdiagramm auf Klassenebene um. Der Spieler öffnet die `RanglisteView`, die die Rangliste über den `LeaderboardController` beim `LeaderboardService` anfragt. Der Service lädt alle Kampfergebnisse über das `BattleResultRepository`. Ein alt-Fragment unterscheidet die beiden Fälle: Sind Ergebnisse vorhanden, sortiert der Service die Spieler nach Siegen und gibt eine Liste von `LeaderboardEntry` zurück, die inklusive der eigenen Platzierung angezeigt wird. Andernfalls wird eine leere Liste zurückgegeben und der Hinweis „Noch keine Kämpfe“ erscheint.
+
+![Sequenzdiagramm Rangliste ansehen](../architektur/sequenzdiagramme/Sequenzdiagramm_Rangliste_ansehen.drawio.png)
 
 ### 3. Nicht-funktionale Anforderungen
 
