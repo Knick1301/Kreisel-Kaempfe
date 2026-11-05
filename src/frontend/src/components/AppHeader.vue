@@ -1,33 +1,68 @@
 <script setup lang="ts">
+import { auth, initials } from '@/auth'
+import { player } from '@/player'
+import AppLogo from './AppLogo.vue'
+
 const links = [
   { to: '/', label: 'Startseite' },
   { to: '/baukasten', label: 'Baukasten' },
   { to: '/rangliste', label: 'Rangliste' },
 ]
+
+const progress = player.leaguePoints / player.leaguePointsMax
+const RING = 2 * Math.PI * 21
 </script>
 
 <template>
   <header class="header">
-    <RouterLink to="/" class="logo">Kreisel<br />Kämpfer</RouterLink>
+    <RouterLink to="/" class="logo" aria-label="Kreisel Kämpfer – Startseite">
+      <AppLogo />
+      <span class="wordmark">Kreisel<br />Kämpfer</span>
+    </RouterLink>
 
-    <nav class="nav">
+    <nav v-if="auth.loggedIn" class="nav">
       <RouterLink
-        v-for="link in links"
+        v-for="(link, i) in links"
         :key="link.to"
         :to="link.to"
         class="nav-link"
         exact-active-class="active"
       >
+        <span class="nav-no">{{ String(i + 1).padStart(2, '0') }}</span>
         {{ link.label }}
       </RouterLink>
     </nav>
 
-    <RouterLink to="/profil" class="avatar" aria-label="Profil" exact-active-class="active">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    </RouterLink>
+    <div v-if="auth.loggedIn" class="me">
+      <RouterLink to="/rangliste" class="league">
+        <span class="league-top">
+          <span>{{ player.league }}</span>
+          <span class="faint">{{ player.leaguePoints }}/{{ player.leaguePointsMax }}</span>
+        </span>
+        <span class="league-bar"><span :style="{ width: `${progress * 100}%` }" /></span>
+      </RouterLink>
+
+      <RouterLink
+        to="/profil"
+        class="avatar"
+        :aria-label="`Profil von ${auth.username}`"
+        :title="auth.username"
+        exact-active-class="active"
+      >
+        <svg class="ring" viewBox="0 0 46 46" aria-hidden="true">
+          <circle cx="23" cy="23" r="21" class="ring-track" />
+          <circle
+            cx="23"
+            cy="23"
+            r="21"
+            class="ring-fill"
+            :stroke-dasharray="`${RING * progress} ${RING}`"
+          />
+        </svg>
+        <span class="initials">{{ initials }}</span>
+        <span class="level">{{ player.level }}</span>
+      </RouterLink>
+    </div>
   </header>
 </template>
 
@@ -38,102 +73,210 @@ const links = [
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 10px 28px;
-  background: rgba(11, 23, 48, 0.88);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
+  gap: 56px;
+  height: var(--header-h);
+  padding: 0 32px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 
 .logo {
-  font-size: 1.45rem;
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wordmark {
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
 }
 
 .nav {
-  flex: 1;
   display: flex;
-  justify-content: space-around;
-  max-width: 560px;
-  margin: 0 auto;
+  align-self: stretch;
+  gap: 8px;
 }
 
 .nav-link {
-  padding: 8px 22px;
-  border-radius: var(--radius-sm);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  font-size: 1.12rem;
   font-weight: 500;
   color: var(--text-muted);
-  transition:
-    background-color 0.2s,
-    color 0.2s;
+  transition: color 0.15s;
+}
+
+.nav-no {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  right: 18px;
+  bottom: -1px;
+  left: 18px;
+  height: 2px;
+  background: var(--text);
+  transform: scaleX(0);
+  transition: transform 0.2s;
 }
 
 .nav-link:hover {
   color: var(--text);
-  background: rgba(38, 89, 166, 0.25);
 }
 
 .nav-link.active {
   color: var(--text);
-  background: var(--primary);
-  box-shadow: 0 0 18px var(--accent-soft);
+}
+
+.nav-link.active .nav-no {
+  color: var(--text-muted);
+}
+
+.nav-link.active::after {
+  transform: scaleX(1);
+}
+
+.me {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: auto;
+}
+
+.league {
+  display: grid;
+  gap: 8px;
+  min-width: 190px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  transition: border-color 0.15s;
+}
+
+.league:hover {
+  border-color: var(--line-strong);
+}
+
+.league-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.faint {
+  color: var(--text-faint);
+}
+
+.league-bar {
+  height: 3px;
+  background: var(--line);
+}
+
+.league-bar span {
+  display: block;
+  height: 100%;
+  background: var(--text);
 }
 
 .avatar {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
-  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+
+.ring-track {
+  stroke: var(--line-strong);
+}
+
+.ring-fill {
+  stroke: var(--text);
+}
+
+.initials {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  color: var(--text-muted);
-  background: radial-gradient(circle at 30% 25%, #2a4a80, #0d1a33 70%);
-  border: 2px solid var(--border);
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+  background: var(--surface-raised);
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background-color 0.15s;
 }
 
-.avatar svg {
-  width: 26px;
-  height: 26px;
+.avatar:hover .initials,
+.avatar.active .initials {
+  background: var(--line-strong);
 }
 
-.avatar:hover,
-.avatar.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 16px var(--accent-soft);
-  color: var(--text);
+.level {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--text);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+@media (max-width: 860px) {
+  .league,
+  .nav-no {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
   .header {
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    padding: 10px 16px;
+    gap: 12px;
+    padding: 0 16px;
   }
 
-  .logo {
-    font-size: 1.15rem;
-  }
-
-  .avatar {
-    width: 42px;
-    height: 42px;
-    margin-left: auto;
+  .wordmark {
+    display: none;
   }
 
   .nav {
-    order: 3;
-    flex-basis: 100%;
-    justify-content: space-between;
+    gap: 0;
   }
 
   .nav-link {
-    padding: 6px 12px;
-    font-size: 0.9rem;
+    padding: 0 8px;
+    font-size: 0.88rem;
+  }
+
+  .nav-link::after {
+    right: 8px;
+    left: 8px;
   }
 }
 </style>

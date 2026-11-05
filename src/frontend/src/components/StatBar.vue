@@ -1,16 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = withDefaults(defineProps<{ label: string; value: number; max?: number }>(), {
-  max: 20,
-})
+const props = withDefaults(
+  defineProps<{ label: string; value: number; max?: number; delta?: number }>(),
+  { max: 20, delta: 0 },
+)
 
 const percent = computed(() => Math.min(100, Math.max(0, (props.value / props.max) * 100)))
 </script>
 
 <template>
   <div class="stat">
-    <span class="label">{{ label }}</span>
+    <span class="stat-label">{{ label }}</span>
+    <span class="value">
+      <span v-if="delta" class="delta" :class="delta > 0 ? 'up' : 'down'">
+        {{ delta > 0 ? '+' : '−' }}{{ Math.abs(delta) }}
+      </span>
+      {{ value }}<span class="max">/{{ max }}</span>
+    </span>
     <div
       class="track"
       role="meter"
@@ -21,43 +28,76 @@ const percent = computed(() => Math.min(100, Math.max(0, (props.value / props.ma
     >
       <div class="fill" :style="{ width: `${percent}%` }" />
     </div>
-    <span class="value">{{ value }}</span>
   </div>
 </template>
 
 <style scoped>
 .stat {
   display: grid;
-  grid-template-columns: 96px 1fr 28px;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.85rem;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 8px 12px;
 }
 
-.label {
+.stat-label {
+  font-size: 0.93rem;
   color: var(--text-muted);
 }
 
+.value {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta {
+  margin-right: 8px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  font-size: 0.72rem;
+  vertical-align: 2px;
+}
+
+.delta.up {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.delta.down {
+  color: var(--text-faint);
+}
+
+.max {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
 .track {
-  height: 10px;
-  border-radius: 999px;
-  background: var(--bar-track);
-  overflow: hidden;
+  position: relative;
+  grid-column: 1 / -1;
+  height: 6px;
+  background: var(--line);
+}
+
+.track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(25% - 2px),
+    var(--surface) calc(25% - 2px) 25%
+  );
 }
 
 .fill {
   height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #1d4a8a, var(--accent));
-  box-shadow: 0 0 10px var(--accent-soft);
-  animation: grow 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: width 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  background: var(--text);
   transform-origin: left;
-}
-
-.value {
-  text-align: right;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  animation: grow 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 @keyframes grow {

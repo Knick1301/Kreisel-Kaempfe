@@ -4,19 +4,27 @@ import { useLoop } from '@tresjs/core'
 import { Box3, Vector3, type Group } from 'three'
 import PartModel from './PartModel.vue'
 
+const props = withDefaults(
+  defineProps<{
+    urls: string[]
+    spinKey: number
+    size?: number
+    anchor?: 'center' | 'bottom'
+    selfSpin?: boolean
+  }>(),
+  { size: 1.9, anchor: 'center', selfSpin: true },
+)
 
-const props = defineProps<{ urls: string[]; spinKey: number }>()
+const emit = defineEmits<{ ready: [] }>()
 
 const START_SPEED = 9
 const FRICTION = 1.1
-const TARGET_SIZE = 1.9
 
 const rotor = shallowRef<Group>()
 const content = shallowRef<Group>()
 const loaded = ref(0)
 const fitted = ref(false)
-let speed = START_SPEED
-
+let speed = props.selfSpin ? START_SPEED : 0
 
 watch(loaded, async (count) => {
   if (count < props.urls.length || !content.value) return
@@ -24,18 +32,23 @@ watch(loaded, async (count) => {
   const group = content.value
   const box = new Box3().setFromObject(group)
   const size = box.getSize(new Vector3())
-  const scale = TARGET_SIZE / Math.max(size.x, size.y, size.z, 1e-6)
+  const scale = props.size / Math.max(size.x, size.y, size.z, 1e-6)
   const center = box.getCenter(new Vector3())
   group.scale.setScalar(scale)
-  group.position.copy(center.multiplyScalar(-scale))
+  group.position.set(
+    -center.x * scale,
+    props.anchor === 'bottom' ? -box.min.y * scale : -center.y * scale,
+    -center.z * scale,
+  )
   fitted.value = true
-  speed = START_SPEED
+  emit('ready')
+  if (props.selfSpin) speed = START_SPEED
 })
 
 watch(
   () => props.spinKey,
   () => {
-    speed = START_SPEED
+    if (props.selfSpin) speed = START_SPEED
   },
 )
 

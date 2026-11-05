@@ -1,16 +1,54 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { fetchBeyblades, type BeybladeDto } from '@/api'
-import BeybladeDisplay from '@/components/BeybladeDisplay.vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  fetchBeyblades,
+  fetchStats,
+  quickMatch,
+  type BattleReport,
+  type BeybladeDto,
+  type PlayerStats,
+} from '@/api'
+import BattleResultDialog from '@/components/BattleResultDialog.vue'
+import { useModelUrls } from '@/composables/useModelUrls'
+import { player } from '@/player'
+import { hasWebGL } from '@/webgl'
+import { pickActive, setActiveId } from '@/activeBeyblade'
+import BeybladeSpinner from '@/components/BeybladeSpinner.vue'
 import StatBar from '@/components/StatBar.vue'
 
-const beyblade = ref<BeybladeDto | null>(null)
+const ArenaStage = defineAsyncComponent(() => import('@/components/three/ArenaStage.vue'))
+
+const beyblades = ref<BeybladeDto[]>([])
+const activeIndex = ref(0)
+const beyblade = computed(() => beyblades.value[activeIndex.value] ?? null)
+
+function cycle(step: number) {
+  const n = beyblades.value.length
+  if (n < 2) return
+  activeIndex.value = (activeIndex.value + step + n) % n
+  setActiveId(beyblade.value!.id)
+  spinKey.value++
+}
 const loading = ref(true)
 const error = ref<string | null>(null)
+const spinKey = ref(0)
+
+const router = useRouter()
+const playerStats = ref<PlayerStats | null>(null)
 
 onMounted(async () => {
+  fetchStats()
+    .then((s) => (playerStats.value = typeof s?.winRate === 'number' ? s : null))
+    .catch(() => {})
   try {
-    beyblade.value = (await fetchBeyblades())[0] ?? null
+    const list = await fetchBeyblades()
+    beyblades.value = Array.isArray(list) ? list : []
+    const active = pickActive(beyblades.value)
+    activeIndex.value = Math.max(
+      0,
+      beyblades.value.findIndex((b) => b.id === active?.id),
+    )
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -21,301 +59,386 @@ onMounted(async () => {
 const parts = computed(() =>
   beyblade.value ? [beyblade.value.fusionWheel, beyblade.value.spinTrack, beyblade.value.tip] : [],
 )
+const urls = useModelUrls(() => parts.value)
+const stageUrls = computed(() => (loading.value ? undefined : urls.value))
+
+const partSpecs = computed(() =>
+  beyblade.value
+    ? [
+        { slot: 'Fusion Wheel', name: beyblade.value.fusionWheel.name },
+        { slot: 'Spin Track', name: beyblade.value.spinTrack.name },
+        { slot: 'Tip', name: beyblade.value.tip.name },
+      ]
+    : [],
+)
 
 const stats = computed(() => {
   const s = beyblade.value?.stats
   if (!s) return []
   return [
-    { label: 'Angriff', value: s.attack, max: 20 },
-    { label: 'Verteidigung', value: s.defense, max: 20 },
-    { label: 'Ausdauer', value: s.stamina, max: 20 },
-    { label: 'Gewicht', value: s.weight, max: 100 },
+    { label: 'Angriff', value: s.attack },
+    { label: 'Verteidigung', value: s.defense },
+    { label: 'Ausdauer', value: s.stamina },
   ]
 })
 
 const modes = [
-  { id: 'quick', label: 'Schnelles Match', icon: 'swords' },
-  { id: 'friend', label: 'Freundschafts­match', icon: 'users' },
-  { id: 'tournament', label: 'Turnier', icon: 'trophy' },
+  {
+    id: 'friend',
+    label: 'Freundschaftsmatch',
+    sub: 'Lobby erstellen oder beitreten',
+    to: '/lobby',
+  },
+  { id: 'tournament', label: 'Turnier', sub: 'Kommt bald', to: null },
 ] as const
+
+function openMode(to: string | null) {
+  if (to) router?.push(to)
+}
+
+const matching = ref(false)
+const matchError = ref<string | null>(null)
+const report = ref<BattleReport | null>(null)
+
+async function startQuickMatch() {
+  if (!beyblade.value || matching.value) return
+  matching.value = true
+  matchError.value = null
+  spinKey.value++
+  try {
+    const [result] = await Promise.all([
+      quickMatch(beyblade.value.id),
+      new Promise((r) => setTimeout(r, 900)),
+    ])
+    report.value = result
+    fetchStats()
+      .then((s) => (playerStats.value = s))
+      .catch(() => {})
+  } catch (e) {
+    matchError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    matching.value = false
+  }
+}
+
+function again() {
+  report.value = null
+  startQuickMatch()
+}
+
+const leagueProgress = (player.leaguePoints / player.leaguePointsMax) * 100
+
+const webgl = hasWebGL()
 </script>
 
 <template>
-  <main class="home">
-    <section class="card bey-card">
-      <header class="card-head">
-        <h2>Dein Beyblade</h2>
-        <RouterLink to="/baukasten" class="edit-link">
-          Bearbeiten
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-          </svg>
-        </RouterLink>
-      </header>
+  <main class="arena-page home">
+    <div class="stage" @click="spinKey++">
+      <ArenaStage v-if="webgl" :urls="stageUrls" :spin-key="spinKey" />
+      <div v-else class="stage-fallback"><BeybladeSpinner /></div>
+    </div>
 
-      <p v-if="error" class="hint">Backend nicht erreichbar ({{ error }})</p>
-      <p v-else-if="loading" class="hint">Lade Beyblade …</p>
-      <p v-else-if="!beyblade" class="hint">Du hast noch keinen Beyblade gebaut.</p>
+    <div class="overlay">
+      <section class="panel bey" aria-labelledby="bey-name">
+        <header class="panel-head">
+          <span class="label"><i class="dot" />Dein Beyblade</span>
+          <span v-if="beyblades.length > 1" class="switcher">
+            <button type="button" aria-label="Vorheriger Kreisel" @click="cycle(-1)">‹</button>
+            <span class="label">{{ activeIndex + 1 }}/{{ beyblades.length }}</span>
+            <button type="button" aria-label="Nächster Kreisel" @click="cycle(1)">›</button>
+          </span>
+          <span v-else-if="beyblade" class="label"
+            >#{{ String(beyblade.id).padStart(3, '0') }}</span
+          >
+        </header>
 
-      <div v-else class="bey-body">
-        <div class="bey-visual">
-          <BeybladeDisplay :parts="parts" />
-        </div>
-
-        <div class="bey-info">
-          <h3 class="bey-name">{{ beyblade.name }}</h3>
-          <div class="stats">
-            <StatBar
-              v-for="s in stats"
-              :key="s.label"
-              :label="s.label"
-              :value="s.value"
-              :max="s.max"
-            />
+        <div class="panel-body">
+          <p v-if="error" class="hint">Backend nicht erreichbar ({{ error }})</p>
+          <p v-else-if="loading" class="hint">Lade Beyblade …</p>
+          <div v-else-if="!beyblade" class="hint">
+            <p>Du hast noch keinen Beyblade gebaut.</p>
+            <RouterLink to="/baukasten" class="btn-secondary">Jetzt bauen</RouterLink>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="card modes" aria-label="Spielmodus wählen">
-      <button v-for="mode in modes" :key="mode.id" type="button" class="mode">
-        <svg
-          class="mode-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <template v-if="mode.icon === 'swords'">
-            <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
-            <line x1="13" x2="19" y1="19" y2="13" />
-            <line x1="16" x2="20" y1="16" y2="20" />
-            <line x1="19" x2="21" y1="21" y2="19" />
-            <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5" />
-            <line x1="5" x2="9" y1="14" y2="18" />
-            <line x1="7" x2="4" y1="17" y2="20" />
-            <line x1="3" x2="5" y1="19" y2="21" />
-          </template>
-          <template v-else-if="mode.icon === 'users'">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </template>
           <template v-else>
-            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-            <path d="M4 22h16" />
-            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+            <h1 id="bey-name" class="bey-name">{{ beyblade.name }}</h1>
+
+            <dl class="specs">
+              <div v-for="p in partSpecs" :key="p.slot">
+                <dt>{{ p.slot }}</dt>
+                <dd>{{ p.name }}</dd>
+              </div>
+              <div>
+                <dt>Gewicht</dt>
+                <dd class="mono">{{ beyblade.stats.weight }}g</dd>
+              </div>
+            </dl>
+
+            <div class="stats">
+              <StatBar v-for="s in stats" :key="s.label" :label="s.label" :value="s.value" />
+            </div>
+
+            <RouterLink
+              :to="{ path: '/baukasten', query: { id: beyblade.id } }"
+              class="btn-secondary"
+            >
+              Im Baukasten bearbeiten
+              <span aria-hidden="true">↗</span>
+            </RouterLink>
           </template>
-        </svg>
-        <span>{{ mode.label }}</span>
-      </button>
-    </section>
+        </div>
+      </section>
+
+      <div class="side">
+        <section class="panel" aria-label="Spielmodi">
+          <header class="panel-head">
+            <span class="label"><i class="dot" />Spielmodi</span>
+          </header>
+
+          <div class="panel-body modes">
+            <button
+              v-for="(m, i) in modes"
+              :key="m.id"
+              type="button"
+              class="mode mode-tile"
+              :disabled="!m.to"
+              @click="openMode(m.to)"
+            >
+              <span class="mode-no">{{ String(i + 1).padStart(2, '0') }}</span>
+              <span class="mode-text">
+                <span class="mode-label">{{ m.label }}</span>
+                <span class="mode-sub">{{ m.sub }}</span>
+              </span>
+              <span class="mode-go" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </section>
+
+        <RouterLink to="/rangliste" class="panel league">
+          <header class="panel-head">
+            <span class="label"><i class="dot" />Liga</span>
+            <span class="label">Rangliste ↗</span>
+          </header>
+
+          <div class="panel-body">
+            <div class="league-head">
+              <strong>{{ player.league }}</strong>
+              <span class="mono">
+                {{ player.leaguePoints }}<span class="faint">/{{ player.leaguePointsMax }}</span>
+              </span>
+            </div>
+            <div class="league-bar"><span :style="{ width: `${leagueProgress}%` }" /></div>
+            <div class="league-meta">
+              <span
+                >Noch {{ player.leaguePointsMax - player.leaguePoints }} bis
+                {{ player.nextLeague }}</span
+              >
+              <span class="mono">
+                {{ playerStats ? `${playerStats.winRate} % Siege` : '–' }}
+              </span>
+            </div>
+          </div>
+        </RouterLink>
+      </div>
+
+      <div class="cta-wrap">
+        <button
+          type="button"
+          class="mode cta"
+          :disabled="!beyblade || matching"
+          @click="startQuickMatch"
+        >
+          <span class="cta-label">{{ matching ? 'Suche Gegner …' : 'Schnelles Match' }}</span>
+          <span class="cta-arrow" aria-hidden="true">→</span>
+        </button>
+        <p class="cta-sub">{{ matchError ?? 'Zufälliger Gegner · Matchmaking' }}</p>
+      </div>
+    </div>
+
+    <BattleResultDialog v-if="report" :report="report" @close="report = null" @again="again" />
   </main>
 </template>
 
 <style scoped>
-.home {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.75fr);
-  gap: 28px;
-  align-items: start;
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 56px 28px;
+.bey {
+  grid-column: 1;
 }
 
-.card {
-  background: linear-gradient(160deg, var(--surface-raised), var(--surface) 60%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
-}
-
-.bey-card {
-  padding: 28px 32px 36px;
-}
-
-.card-head {
+.switcher {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
+  margin: -6px -10px -6px 0;
 }
 
-.card-head h2 {
-  margin: 0;
-  font-size: 1.3rem;
-  font-weight: 700;
-}
-
-.edit-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  transition:
-    color 0.2s,
-    background-color 0.2s;
-}
-
-.edit-link svg {
-  width: 14px;
-  height: 14px;
-}
-
-.edit-link:hover {
-  color: var(--text);
-  background: rgba(38, 89, 166, 0.25);
-}
-
-.bey-body {
+.switcher button {
   display: grid;
-  grid-template-columns: minmax(150px, 220px) 1fr;
-  align-items: center;
-  gap: 32px;
-  margin-top: 20px;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: none;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
-.hint {
-  margin: 40px 0;
+.switcher button:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.switcher .label {
+  min-width: 34px;
   text-align: center;
-  color: var(--text-muted);
 }
 
 .bey-name {
   margin: 0 0 22px;
-  text-align: center;
-  font-size: 1.1rem;
+  font-size: 2.9rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
 }
 
-.stats {
+.side {
+  grid-column: 3;
+  align-self: start;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .modes {
   display: grid;
   gap: 10px;
-  padding: 10px;
+  padding: 14px;
 }
 
-.mode {
-  position: relative;
-  display: flex;
-  flex-direction: column;
+.mode-tile {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 112px;
-  padding: 16px 12px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, var(--primary-hover), var(--primary));
-  font-size: 1.05rem;
-  font-weight: 600;
-  text-align: center;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #0c0c0e;
+  text-align: left;
   cursor: pointer;
-  overflow: hidden;
   transition:
-    transform 0.2s,
-    box-shadow 0.2s,
-    border-color 0.2s;
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
-.mode::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.14), transparent 70%);
-  transform: translateX(-100%);
-  transition: transform 0.6s;
+.mode-no {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 500;
+  color: var(--text-faint);
+  transition: color 0.15s;
 }
 
-.mode:hover {
-  transform: translateY(-2px);
-  border-color: rgba(120, 170, 255, 0.5);
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.35);
+.mode-text {
+  display: grid;
+  gap: 3px;
 }
 
-.mode:hover::after {
-  transform: translateX(100%);
+.mode-label {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-.mode:active {
-  transform: translateY(0);
+.mode-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
-.mode-icon {
-  width: 40px;
-  height: 40px;
-  transition: transform 0.3s;
+.mode-go {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--text-muted);
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
-.mode:hover .mode-icon {
-  transform: scale(1.12) rotate(-6deg);
+.mode-tile:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
-@media (max-width: 820px) {
-  .home {
-    grid-template-columns: 1fr;
-    padding: 28px 16px;
-  }
-
-  .modes {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .mode {
-    min-height: 96px;
-    font-size: 0.9rem;
-  }
+.mode-tile:not(:disabled):hover {
+  border-color: var(--text-faint);
+  background: var(--surface-raised);
 }
 
-@media (max-width: 560px) {
-  .bey-card {
-    padding: 22px 18px 26px;
-  }
+.mode-tile:not(:disabled):hover .mode-no {
+  color: var(--text);
+}
 
-  .bey-body {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
+.mode-tile:not(:disabled):hover .mode-go {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
 
-  .bey-visual {
-    width: 180px;
-    margin: 0 auto;
-  }
+.league {
+  transition: border-color 0.15s;
+}
 
-  .modes {
-    grid-template-columns: 1fr;
-  }
+.league:hover {
+  border-color: var(--line-strong);
+}
 
-  .mode {
-    flex-direction: row;
-    min-height: 64px;
-  }
+.league-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
 
-  .mode-icon {
-    width: 28px;
-    height: 28px;
-  }
+.league-head strong {
+  font-size: 1.7rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.league-bar {
+  height: 6px;
+  margin-bottom: 10px;
+  background: var(--line);
+}
+
+.league-bar span {
+  display: block;
+  height: 100%;
+  background: var(--text);
+}
+
+.league-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mode,
-  .mode::after,
-  .mode-icon {
+  .mode-tile,
+  .mode-go {
     transition: none;
   }
 }

@@ -1,4 +1,3 @@
-
 export interface PartDto {
   id: number
   name: string
@@ -29,20 +28,198 @@ export interface BeybladeDto {
   stats: BeybladeStats
 }
 
-export const CURRENT_USER = 'demo'
+import { auth, clearSession } from '@/auth'
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`/api${path}`)
-  if (!res.ok) {
-    throw new Error(`${res.status} ${res.statusText}`)
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
   }
+}
+
+let onUnauthorized: () => void = () => {}
+export function setUnauthorizedHandler(handler: () => void) {
+  onUnauthorized = handler
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (auth.token) headers.Authorization = `Bearer ${auth.token}`
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const res = await fetch(`/api${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (res.status === 401 && auth.token) {
+    clearSession()
+    onUnauthorized()
+  }
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`
+    try {
+      const data = (await res.json()) as { message?: string }
+      if (data?.message) message = data.message
+    } catch {}
+    throw new ApiError(message, res.status)
+  }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
-export function fetchBeyblades(username = CURRENT_USER) {
-  return get<BeybladeDto[]>(`/users/${encodeURIComponent(username)}/beyblades`)
+const get = <T>(path: string) => request<T>('GET', path)
+
+export function fetchBeyblades() {
+  return get<BeybladeDto[]>('/me/beyblades')
 }
 
 export function modelUrl(modelPath: string) {
   return `/models/${modelPath}`
+}
+
+export type PartKind = 'fusion-wheels' | 'spin-tracks' | 'tips'
+
+export function fetchParts(kind: PartKind) {
+  return get<PartDto[]>(`/parts/${kind}`)
+}
+
+export function fetchPreview(fusionWheelId: number, spinTrackId: number, tipId: number) {
+  const q = new URLSearchParams({
+    fusionWheelId: String(fusionWheelId),
+    spinTrackId: String(spinTrackId),
+    tipId: String(tipId),
+  })
+  return get<BeybladeStats>(`/beyblades/preview?${q}`)
+}
+
+export interface BeybladeRequest {
+  name: string
+  fusionWheelId: number
+  spinTrackId: number
+  tipId: number
+}
+
+export function createBeyblade(req: BeybladeRequest) {
+  return request<BeybladeDto>('POST', '/me/beyblades', req)
+}
+
+export function updateBeyblade(id: number, req: BeybladeRequest) {
+  return request<BeybladeDto>('PUT', `/me/beyblades/${id}`, req)
+}
+
+export function deleteBeyblade(id: number) {
+  return request<void>('DELETE', `/me/beyblades/${id}`)
+}
+
+export type FinishType = 'BURST' | 'SPIN_OUT' | 'DECISION'
+
+export interface BattleReport {
+  id: number
+  winner: string
+  loser: string
+  winnerBeyblade: string
+  loserBeyblade: string
+  finish: FinishType
+  rounds: number
+  playedAt: string
+}
+
+export const FINISH_LABEL: Record<FinishType, string> = {
+  BURST: 'Burst',
+  SPIN_OUT: 'Ausgedreht',
+  DECISION: 'Nach Punkten',
+}
+
+export function quickMatch(beybladeId: number) {
+  return request<BattleReport>('POST', '/battles/quick', { beybladeId })
+}
+
+export function fetchBattles(limit = 10) {
+  return get<BattleReport[]>(`/me/battles?limit=${limit}`)
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  username: string
+  wins: number
+  losses: number
+}
+
+export interface Leaderboard {
+  entries: LeaderboardEntry[]
+  me: LeaderboardEntry | null
+  totalPlayers: number
+  empty: boolean
+}
+
+export function fetchLeaderboard(limit = 10) {
+  return get<Leaderboard>(`/leaderboard?limit=${limit}`)
+}
+
+export interface PlayerStats {
+  username: string
+  wins: number
+  losses: number
+  winRate: number
+  rank: number | null
+}
+
+export function fetchStats() {
+  return get<PlayerStats>('/me/stats')
+}
+
+export type LobbyStatus = 'OPEN' | 'READY' | 'FINISHED'
+
+export interface LobbyDto {
+  id: string
+  name: string
+  host: string
+  guest: string | null
+  status: LobbyStatus
+  createdAt: string
+  result: BattleReport | null
+}
+
+export function fetchLobbies() {
+  return get<LobbyDto[]>('/lobbies')
+}
+
+export function fetchLobby(id: string) {
+  return get<LobbyDto>(`/lobbies/${encodeURIComponent(id)}`)
+}
+
+export function createLobby(name: string, beybladeId: number) {
+  return request<LobbyDto>('POST', '/lobbies', { name, beybladeId })
+}
+
+export function joinLobby(id: string, beybladeId: number) {
+  return request<LobbyDto>('POST', `/lobbies/${encodeURIComponent(id)}/join`, { beybladeId })
+}
+
+export function startLobby(id: string) {
+  return request<BattleReport>('POST', `/lobbies/${encodeURIComponent(id)}/start`)
+}
+
+export function leaveLobby(id: string) {
+  return request<void>('DELETE', `/lobbies/${encodeURIComponent(id)}`)
+}
+
+export interface AuthResponse {
+  token: string
+  username: string
+  message: string
+}
+
+export function register(username: string, password: string) {
+  return request<AuthResponse>('POST', '/auth/register', { username, password })
+}
+
+export function login(username: string, password: string) {
+  return request<AuthResponse>('POST', '/auth/login', { username, password })
+}
+
+export function logout() {
+  return request<void>('POST', '/auth/logout')
 }
