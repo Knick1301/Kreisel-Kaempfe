@@ -113,7 +113,66 @@ export function deleteBeyblade(id: number) {
   return request<void>('DELETE', `/me/beyblades/${id}`)
 }
 
-export type FinishType = 'BURST' | 'SPIN_OUT' | 'DECISION'
+export type FinishType = 'BURST' | 'RING_OUT' | 'SPIN_OUT' | 'DECISION'
+export type BattleMode = 'PVP' | 'BOT'
+/** A ist der Herausforderer, B der Gegner. */
+export type Side = 'A' | 'B'
+export type Archetype = 'ATTACK' | 'DEFENSE' | 'STAMINA' | 'BALANCE'
+
+export interface StyleShares {
+  attack: number
+  defense: number
+  stamina: number
+}
+
+export interface FighterDto {
+  side: Side
+  username: string
+  bot: boolean
+  beyblade: string
+  stats: BeybladeStats
+  style: StyleShares
+  archetype: Archetype
+  /** Fusion Wheel, Spin Track, Tip – fehlt bei KI-Gegnern (Platzhalter-Modell). */
+  parts?: PartDto[]
+  /** Akzentfarbe des Platzhalter-Modells, nur bei KI-Gegnern. */
+  accent?: string
+}
+
+export interface MatchupDto {
+  /** Stil-Vorteil von A gegenüber B, positiv = A im Vorteil. */
+  edge: number
+  favored?: Side | null
+}
+
+export interface ArenaInfo {
+  id: string
+  name: string
+}
+
+interface EventAt {
+  /** ms seit dem Launch */
+  t: number
+}
+
+export type TimelineEvent =
+  | (EventAt & { type: 'LAUNCH' | 'TORNADO' | 'ENGAGE' | 'TIMEOUT' })
+  /** angle: Polarwinkel (rad) des Treffpunkts auf der Bowl */
+  | (EventAt & { type: 'CLASH'; attacker: Side; intensity: number; angle: number })
+  | (EventAt & { type: 'DEFLECT'; defender: Side })
+  | (EventAt & { type: 'WOBBLE' | 'BURST' | 'SPIN_OUT'; victim: Side })
+  /** angle: Richtung der Tasche, pocket: Index in der Arena-Definition */
+  | (EventAt & { type: 'NEAR_RING_OUT' | 'RING_OUT'; victim: Side; angle: number; pocket: number })
+
+export type EventType = TimelineEvent['type']
+
+export interface BattleTimeline {
+  sampleMs: number
+  /** Spin-Energie 0–1, Sample i gehört zu i · sampleMs */
+  energy: Record<Side, number[]>
+  hits: Record<Side, number>
+  events: TimelineEvent[]
+}
 
 export interface BattleReport {
   id: number
@@ -122,18 +181,46 @@ export interface BattleReport {
   winnerBeyblade: string
   loserBeyblade: string
   finish: FinishType
+  /** Nur bei Kämpfen aus der alten Rundensimulation sinnvoll. */
   rounds: number
   playedAt: string
+  mode?: BattleMode
+  seed?: number
+  durationMs?: number
+  winnerSide?: Side
+  arena?: ArenaInfo
+  fighters?: [FighterDto, FighterDto]
+  matchup?: MatchupDto
+  /** Fehlt, wenn sich der Kampf nicht exakt nachspielen lässt. */
+  timeline?: BattleTimeline
 }
 
 export const FINISH_LABEL: Record<FinishType, string> = {
   BURST: 'Burst',
+  RING_OUT: 'Ring-Out',
   SPIN_OUT: 'Ausgedreht',
   DECISION: 'Nach Punkten',
 }
 
+export const ARCHETYPE_LABEL: Record<Archetype, string> = {
+  ATTACK: 'Angriff',
+  DEFENSE: 'Verteidigung',
+  STAMINA: 'Ausdauer',
+  BALANCE: 'Balance',
+}
+
 export function quickMatch(beybladeId: number) {
   return request<BattleReport>('POST', '/battles/quick', { beybladeId })
+}
+
+/** Kampf gegen einen KI-Gegner mit Zufallsname, Ergebnis und Timeline kommen vom Server. */
+export function botBattle(beybladeId: number) {
+  return request<BattleReport>('POST', '/battles/bot', { beybladeId })
+}
+
+/** Gespeicherter Kampf inklusive Timeline (Replay per Seed). */
+export function fetchBattle(id: number) {
+  return get<BattleReport>(`/battles/${id}`)
 }
 
 export function fetchBattles(limit = 10) {
@@ -160,10 +247,14 @@ export function fetchLeaderboard(limit = 10) {
 
 export interface PlayerStats {
   username: string
+  /** Siege gegen echte Spieler (Rangliste) */
   wins: number
   losses: number
   winRate: number
   rank: number | null
+  /** Bilanz gegen KI-Gegner (nur Profil) */
+  botWins?: number
+  botLosses?: number
 }
 
 export function fetchStats() {
