@@ -27,13 +27,16 @@ public class LeaderboardService {
         return new LeaderboardDto(all.stream().limit(limit).toList(), me, all.size(), all.isEmpty());
     }
 
+    /** Siege, Niederlagen, Quote und Rang nur aus PvP-Kämpfen, die KI-Bilanz kommt getrennt dazu. */
     public PlayerStatsDto stats(String username) {
         LeaderboardEntry me = find(ranking(), username);
+        long botWins = results.countBotWins(username);
+        long botLosses = results.countBotLosses(username);
         if (me == null) {
-            return new PlayerStatsDto(username, 0, 0, 0, null);
+            return new PlayerStatsDto(username, 0, 0, 0, null, botWins, botLosses);
         }
         int winRate = (int) Math.round(100.0 * me.wins() / me.battles());
-        return new PlayerStatsDto(username, me.wins(), me.losses(), winRate, me.rank());
+        return new PlayerStatsDto(username, me.wins(), me.losses(), winRate, me.rank(), botWins, botLosses);
     }
 
     List<LeaderboardEntry> ranking() {

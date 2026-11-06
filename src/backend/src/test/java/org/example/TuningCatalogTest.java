@@ -46,6 +46,14 @@ class TuningCatalogTest {
         assertEquals(max(tips, "dash"), BattleTuning.DASH_REF);
         assertEquals(max(wheels, "burstResistance"), BattleTuning.BURST_REF);
 
+        assertEquals(min(wheels, p -> p.path("attack").asInt(0)), BattleTuning.ATTACK_MIN);
+        assertEquals(min(wheels, p -> p.path("defense").asInt(0)) + min(tracks, p -> p.path("defense").asInt(0)),
+                BattleTuning.DEFENSE_MIN);
+        assertEquals(min(tracks, p -> p.path("stamina").asInt(0)) + min(tips, p -> p.path("stamina").asInt(0)),
+                BattleTuning.STAMINA_MIN);
+        assertEquals(min(tips, p -> p.path("dash").asInt(0)), BattleTuning.DASH_MIN);
+        assertEquals(min(wheels, p -> p.path("burstResistance").asInt(0)), BattleTuning.BURST_MIN);
+
         ToIntFunction<JsonNode> weight = p -> p.get("weight").asInt();
         assertEquals(min(wheels, weight) + min(tracks, weight) + min(tips, weight), BattleTuning.WEIGHT_MIN);
         assertEquals(max(wheels, "weight") + max(tracks, "weight") + max(tips, "weight"), BattleTuning.WEIGHT_MAX);

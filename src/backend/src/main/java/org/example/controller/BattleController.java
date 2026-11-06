@@ -2,6 +2,7 @@ package org.example.controller;
 
 import org.example.config.AuthInterceptor;
 import org.example.dtos.BattleReportDto;
+import org.example.dtos.BotMatchRequest;
 import org.example.dtos.LeaderboardDto;
 import org.example.dtos.QuickMatchRequest;
 import org.example.services.BattleService;
@@ -33,12 +34,21 @@ public class BattleController {
     @ResponseStatus(HttpStatus.CREATED)
     public BattleReportDto quickMatch(@RequestAttribute(AuthInterceptor.USERNAME) String username,
                                       @RequestBody QuickMatchRequest request) {
-        return BattleReportDto.from(battles.quickMatch(username, request.beybladeId()));
+        return battles.report(battles.quickMatch(username, request.beybladeId()));
     }
 
+    /** Kampf gegen einen KI-Gegner mit Zufallsname und Zufallswerten. */
+    @PostMapping("/battles/bot")
+    @ResponseStatus(HttpStatus.CREATED)
+    public BattleReportDto botMatch(@RequestAttribute(AuthInterceptor.USERNAME) String username,
+                                    @RequestBody BotMatchRequest request) {
+        return battles.report(battles.botMatch(username, request.beybladeId()));
+    }
+
+    /** Einzelner Kampf inklusive Timeline, wird per Seed neu simuliert (Replay). */
     @GetMapping("/battles/{id}")
     public BattleReportDto battle(@PathVariable Long id) {
-        return BattleReportDto.from(battles.get(id));
+        return battles.report(id);
     }
 
     @GetMapping("/leaderboard")

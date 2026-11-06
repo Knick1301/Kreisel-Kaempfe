@@ -38,7 +38,13 @@ public final class BattleTuning {
 
     // ---------------------------------------------------------------- Normalisierung
 
-    // Referenzwerte = Maximum, das mit den Teilen aus parts/*.json erreichbar ist (TuningCatalogTest prüft das).
+    // Referenzwerte = Maximum bzw. Minimum, das mit den Teilen aus parts/*.json erreichbar ist
+    // (TuningCatalogTest prüft das). Die Minima begrenzen die Werte der KI-Gegner.
+    public static final int ATTACK_MIN = 1;
+    public static final int DEFENSE_MIN = 3;
+    public static final int STAMINA_MIN = 6;
+    public static final int DASH_MIN = 2;
+    public static final int BURST_MIN = 2;
     public static final int ATTACK_REF = 7;
     public static final int DEFENSE_REF = 12;
     public static final int STAMINA_REF = 16;
@@ -51,6 +57,15 @@ public final class BattleTuning {
 
     /** Ab diesem Anteil am Stil-Vektor bekommt ein Kreisel ein Archetyp-Label, sonst „Balance“. */
     public static final double ARCHETYPE_SHARE = 0.42;
+    /** Matchup-Kanten darunter gelten in der Anzeige als ausgeglichen. */
+    public static final double EVEN_EDGE = 0.05;
+
+    // ---------------------------------------------------------------- KI-Gegner
+
+    /** Budget des KI-Gegners relativ zum Spieler, ± (die Tests erlauben ±10 % inklusive Rundung). */
+    public static final double BOT_BUDGET_SPREAD = 0.08;
+    /** Wahrscheinlichkeit, dass ein KI-Gegner ohne Archetyp-Bias gebaut wird. */
+    public static final double BOT_BALANCE_CHANCE = 0.15;
 
     // ---------------------------------------------------------------- Launch & Reibung
 

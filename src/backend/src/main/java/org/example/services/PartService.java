@@ -1,6 +1,7 @@
 package org.example.services;
 
 import org.example.entities.parts.FusionWheel;
+import org.example.entities.parts.Part;
 import org.example.entities.parts.SpinTrack;
 import org.example.entities.parts.Tip;
 import org.example.repositories.FusionWheelRepository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PartService {
@@ -41,6 +43,16 @@ public class PartService {
 
     public Tip getTip(Long id) {
         return tips.findById(id).orElseThrow(() -> notFound("Tip", id));
+    }
+
+    /** Die drei Teile eines gespeicherten Kreisels, leer wenn eine ID fehlt. */
+    public Optional<List<Part>> resolve(Long fusionWheelId, Long spinTrackId, Long tipId) {
+        if (fusionWheelId == null || spinTrackId == null || tipId == null) return Optional.empty();
+        Optional<FusionWheel> wheel = wheels.findById(fusionWheelId);
+        Optional<SpinTrack> track = spinTracks.findById(spinTrackId);
+        Optional<Tip> tip = tips.findById(tipId);
+        if (wheel.isEmpty() || track.isEmpty() || tip.isEmpty()) return Optional.empty();
+        return Optional.of(List.of(wheel.get(), track.get(), tip.get()));
     }
 
     private ResponseStatusException notFound(String type, Long id) {
