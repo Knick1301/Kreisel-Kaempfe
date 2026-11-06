@@ -2,18 +2,11 @@
 import { onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useLoop, useTres } from '@tresjs/core'
 import {
-  AdditiveBlending,
-  CanvasTexture,
-  TextureLoader,
-  type Texture,
   DoubleSide,
   Fog,
-  SRGBColorSpace,
   Vector2,
   Vector3,
-  MeshStandardMaterial,
   MOUSE,
-  PlaneGeometry,
   TOUCH,
   type Group,
   type Mesh,
@@ -21,20 +14,23 @@ import {
   type WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { baseBowlY, BEY_SIZE, STANDARD_ARENA } from '@/game/arenas'
 import BeybladeRotor from './BeybladeRotor.vue'
+import BowlDecor from './BowlDecor.vue'
 import PlaceholderRotor from './PlaceholderRotor.vue'
 import StudioEnvironment from './StudioEnvironment.vue'
+import { makeMetallic } from './materials'
+import { makeFloorTexture, makeShadowTexture } from './textures'
 
 const props = defineProps<{ urls: string[] | null | undefined; spinKey: number }>()
 
 const BG = '#0a0a0b'
 const ACCENT = '#ededef'
 
-const R = 4
-const K = 0.05
-const bowlY = (r: number) => K * r * r
+// Showcase-Bowl: Standard-Stadion ohne Ridge und Taschen
+const R = STANDARD_ARENA.radius
+const bowlY = (r: number) => baseBowlY(STANDARD_ARENA, r)
 
-const BEY_SIZE = 1.45
 const PLACEHOLDER_SCALE = BEY_SIZE / 1.9
 
 const bowlProfile = [
@@ -46,75 +42,8 @@ const bowlProfile = [
   new Vector2(R + 0.9, bowlY(R) + 0.1),
   new Vector2(R + 0.9, -1),
 ]
-const rings = [1.1, 2.2, 3.4].map((r) => ({ r, y: bowlY(r) + 0.004 }))
-
-const TICK_R = 2.7
-const ticks = Array.from({ length: 120 }, (_, i) => {
-  const major = i % 10 === 0
-  const len = major ? 0.22 : 0.08
-  return {
-    angle: (i / 120) * Math.PI * 2,
-    len,
-    color: major ? '#6a6a74' : '#2c2c33',
-    x: TICK_R + len / 2,
-    y: bowlY(TICK_R + len / 2) + 0.015,
-  }
-})
-
-const arcs = [0.35, Math.PI + 0.35].map((start) => ({ start, length: 0.7 }))
-
-function makeShadowTexture() {
-  const c = document.createElement('canvas')
-  c.width = c.height = 128
-  const g = c.getContext('2d')!
-  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64)
-  grad.addColorStop(0, 'rgba(0,0,0,0.65)')
-  grad.addColorStop(1, 'rgba(0,0,0,0)')
-  g.fillStyle = grad
-  g.fillRect(0, 0, 128, 128)
-  return new CanvasTexture(c)
-}
 const shadowTexture = makeShadowTexture()
-
-function makeFloorTexture() {
-  const c = document.createElement('canvas')
-  c.width = 4
-  c.height = 256
-  const g = c.getContext('2d')!
-  const grad = g.createLinearGradient(0, 0, 0, 256)
-  grad.addColorStop(0, '#2a2a2f')
-  grad.addColorStop(0.18, '#1c1c20')
-  grad.addColorStop(0.45, '#111114')
-  grad.addColorStop(0.88, '#0b0b0d')
-  grad.addColorStop(1, '#060607')
-  g.fillStyle = grad
-  g.fillRect(0, 0, 4, 256)
-  const tex = new CanvasTexture(c)
-  tex.colorSpace = SRGBColorSpace
-  tex.flipY = false
-  return tex
-}
 const floorTexture = makeFloorTexture()
-
-const LOGO_SIZE = 2.5
-const logoTexture = shallowRef<Texture | null>(null)
-new TextureLoader().load('/logokreisel.png', (tex) => {
-  tex.colorSpace = SRGBColorSpace
-  logoTexture.value = tex
-})
-
-function makeLogoGeometry() {
-  const g = new PlaneGeometry(LOGO_SIZE, LOGO_SIZE, 48, 48)
-  g.rotateX(-Math.PI / 2)
-  const pos = g.attributes.position!
-  for (let i = 0; i < pos.count; i++) {
-    pos.setY(i, bowlY(Math.hypot(pos.getX(i), pos.getZ(i))) + 0.003)
-  }
-  pos.needsUpdate = true
-  g.computeBoundingSphere()
-  return g
-}
-const logoGeometry = makeLogoGeometry()
 
 const { scene, renderer } = useTres()
 scene.value.fog = new Fog(BG, 9, 17)
@@ -133,24 +62,8 @@ const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').mat
 let spinT = -1
 let spinFrom = 0
 
-function makeMetallic() {
-  spinner.value?.traverse((obj) => {
-    const mesh = obj as Mesh
-    if (!mesh.isMesh) return
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-    const next = mats.map((m) => {
-      if (!(m instanceof MeshStandardMaterial) || m.transparent || m.opacity < 1) return m
-      const c = m.clone()
-      c.metalness = Math.max(c.metalness, 0.85)
-      c.roughness = Math.min(Math.max(c.roughness, 0.22), 0.38)
-      return c
-    })
-    mesh.material = Array.isArray(mesh.material) ? next : next[0]!
-  })
-}
-
 function onModelReady() {
-  makeMetallic()
+  makeMetallic(spinner.value)
   spinOnce()
 }
 
@@ -204,8 +117,6 @@ onUnmounted(() => {
   scene.value.fog = null
   shadowTexture.dispose()
   floorTexture.dispose()
-  logoTexture.value?.dispose()
-  logoGeometry.dispose()
 })
 
 let placeholderSpun = false
@@ -258,42 +169,7 @@ onBeforeRender(({ delta }) => {
     <TresMeshBasicMaterial :map="floorTexture" :side="DoubleSide" />
   </TresMesh>
 
-  <TresMesh
-    v-for="ring in rings"
-    :key="ring.r"
-    :position="[0, ring.y, 0]"
-    :rotation="[-Math.PI / 2, 0, 0]"
-  >
-    <TresRingGeometry :args="[ring.r - 0.006, ring.r + 0.006, 160]" />
-    <TresMeshBasicMaterial color="#1d1d22" />
-  </TresMesh>
-
-  <TresGroup v-for="(t, i) in ticks" :key="`t${i}`" :rotation="[0, -t.angle, 0]">
-    <TresMesh :position="[t.x, t.y, 0]" :rotation="[-Math.PI / 2, 0, 0]">
-      <TresPlaneGeometry :args="[t.len, 0.012]" />
-      <TresMeshBasicMaterial :color="t.color" />
-    </TresMesh>
-  </TresGroup>
-
-  <TresMesh
-    v-for="arc in arcs"
-    :key="arc.start"
-    :position="[0, bowlY(1.1) + 0.006, 0]"
-    :rotation="[-Math.PI / 2, 0, 0]"
-  >
-    <TresRingGeometry :args="[1.08, 1.12, 48, 1, arc.start, arc.length]" />
-    <TresMeshBasicMaterial :color="ACCENT" />
-  </TresMesh>
-
-  <TresMesh v-if="logoTexture" :geometry="logoGeometry" :render-order="1">
-    <TresMeshBasicMaterial
-      :map="logoTexture"
-      :blending="AdditiveBlending"
-      :opacity="0.5"
-      transparent
-      :depth-write="false"
-    />
-  </TresMesh>
+  <BowlDecor :height-at="bowlY" />
 
   <TresMesh :position="[0, bowlY(R) + 0.1, 0]" :rotation="[-Math.PI / 2, 0, 0]">
     <TresTorusGeometry :args="[R + 0.08, 0.014, 8, 240]" />
