@@ -60,19 +60,29 @@ public class BattleService {
         if (userA.getId().equals(userB.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Du kannst nicht gegen dich selbst kämpfen.");
         }
-        return simulateAndSave(BattleMode.PVP, userA, FighterSnapshot.of(userA, beybladeA),
+        return simulateAndSave(BattleMode.PVP, Arena.standard(), userA, FighterSnapshot.of(userA, beybladeA),
                 userB, FighterSnapshot.of(userB, beybladeB));
     }
 
     /** Kampf gegen einen KI-Gegner mit zufälligen Werten. Zählt fürs Profil, nicht für die Rangliste. */
     @Transactional
     public BattleResult botMatch(String username, Long beybladeId) {
+        return botMatch(username, beybladeId, null);
+    }
+
+    /** @param arenaId Arena-ID, {@code null} für das Standard-Stadion */
+    @Transactional
+    public BattleResult botMatch(String username, Long beybladeId, String arenaId) {
+        Arena arena = arenaId == null || arenaId.isBlank()
+                ? Arena.standard()
+                : Arena.find(arenaId).orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unbekannte Arena \"" + arenaId + "\"."));
         User me = user(username);
         Beyblade mine = beyblades.owned(me, beybladeId);
         User bot = users.findByUsername(SystemUserSeeder.BOT_USERNAME).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Gerade ist kein KI-Gegner verfügbar."));
         BotFactory.Bot generated = BotFactory.create(mine.getStats(), random);
-        return simulateAndSave(BattleMode.BOT, me, FighterSnapshot.of(me, mine), bot,
+        return simulateAndSave(BattleMode.BOT, arena, me, FighterSnapshot.of(me, mine), bot,
                 FighterSnapshot.bot(bot.getUsername(), generated.name(), generated.stats(), generated.accent()));
     }
 
@@ -94,9 +104,8 @@ public class BattleService {
         return fight(me, mine, opponent, theirs.get(random.nextInt(theirs.size())));
     }
 
-    private BattleResult simulateAndSave(BattleMode mode, User userA, FighterSnapshot a, User userB,
+    private BattleResult simulateAndSave(BattleMode mode, Arena arena, User userA, FighterSnapshot a, User userB,
                                          FighterSnapshot b) {
-        Arena arena = Arena.standard();
         long seed = random.nextLong() & SEED_MASK;
         BattleOutcome outcome = new Battle(arena, a.fighter(), b.fighter(), seed).run();
 

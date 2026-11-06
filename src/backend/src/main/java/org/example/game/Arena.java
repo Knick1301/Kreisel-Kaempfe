@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Ein Stadion. Aktuell gibt es nur das Standard-Stadion, weitere kommen über {@link #ALL} dazu.
+ * Ein Stadion. Neue Arenen kommen über {@link #ALL} dazu.
  * Die Taschenwinkel müssen zur Arena-Definition im Frontend passen ({@code src/game/arenas.ts}).
  *
  * @param id              stabile ID, wird pro Kampf gespeichert
@@ -20,7 +20,18 @@ public record Arena(String id, String name, double friction, double ringOut, Lis
     public static final Arena STANDARD = new Arena("standard", "Standard-Stadion", 1.0, 1.0,
             List.of(Math.PI / 2, 7 * Math.PI / 6, 11 * Math.PI / 6), Math.toRadians(14));
 
-    private static final Map<String, Arena> ALL = Map.of(STANDARD.id(), STANDARD);
+    /**
+     * Steiler, kleinerer Krater mit rauem Boden (mehr Reibung) und zwei breiten Taschen: Ring-Outs werden
+     * deutlich wahrscheinlicher, Ausdauer-Kreisel haben es etwas schwerer.
+     */
+    public static final Arena KRATER = new Arena("krater", "Vulkan-Krater", 1.03, 2.0,
+            List.of(0.0, Math.PI), Math.toRadians(22));
+
+    private static final Map<String, Arena> ALL = Map.of(STANDARD.id(), STANDARD, KRATER.id(), KRATER);
+
+    public static List<Arena> all() {
+        return List.of(STANDARD, KRATER);
+    }
 
     public static Arena standard() {
         return STANDARD;

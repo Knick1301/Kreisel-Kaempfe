@@ -1,5 +1,8 @@
 [
   { "name": "Sturmklinge", "modelPath": "fusion-wheels/hells-scythe-blade.glb", "weight": 30, "attack": 7, "defense": 1, "burstResistance": 2 },
   { "name": "Bollwerk",    "modelPath": "fusion-wheels/bollwerk.glb",    "weight": 36, "attack": 1, "defense": 5, "burstResistance": 4 },
-  { "name": "Wirbel",      "modelPath": "fusion-wheels/wirbel.glb",      "weight": 32, "attack": 3, "defense": 3, "burstResistance": 4 }
+  { "name": "Wirbel",      "modelPath": "fusion-wheels/wirbel.glb",      "weight": 32, "attack": 3, "defense": 3, "burstResistance": 4 },
+  { "name": "Drachenzahn", "modelPath": "fusion-wheels/drachenzahn.glb", "weight": 33, "attack": 6, "defense": 2, "burstResistance": 3 },
+  { "name": "Eisenmond",   "modelPath": "fusion-wheels/eisenmond.glb",   "weight": 35, "attack": 2, "defense": 4, "burstResistance": 4 },
+  { "name": "Phantom",     "modelPath": "fusion-wheels/phantom.glb",     "weight": 31, "attack": 5, "defense": 2, "burstResistance": 2 }
 ]

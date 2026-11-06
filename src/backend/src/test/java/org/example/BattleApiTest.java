@@ -165,6 +165,30 @@ class BattleApiTest {
     }
 
     @Test
+    void arenaLaesstSichWaehlen() throws Exception {
+        String auth = register("botfan6");
+        long bey = buildBeyblade(auth);
+        JsonNode battle = json.readTree(mvc.perform(post("/api/battles/bot").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"krater\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+        assertEquals("krater", battle.get("arena").get("id").asText());
+        assertEquals("Vulkan-Krater", battle.get("arena").get("name").asText());
+
+        JsonNode replay = json.readTree(mvc.perform(get("/api/battles/" + battle.get("id").asLong())
+                        .header("Authorization", auth))
+                .andReturn().getResponse().getContentAsString());
+        assertEquals(battle.get("timeline"), replay.get("timeline"));
+
+        mvc.perform(post("/api/battles/bot").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"mond\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(status().reason("Unbekannte Arena \"mond\"."));
+    }
+
+    @Test
     void kiKannSichNichtAnmelden() throws Exception {
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"KI\",\"password\":\"geheim123\"}"))

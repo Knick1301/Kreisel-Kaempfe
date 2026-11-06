@@ -1,3 +1,4 @@
 package org.example.dtos;
 
-public record BotMatchRequest(Long beybladeId) {}
+/** @param arenaId optional, ohne Angabe das Standard-Stadion */
+public record BotMatchRequest(Long beybladeId, String arenaId) {}

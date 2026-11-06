@@ -1,5 +1,8 @@
 [
   { "name": "Schwerring", "modelPath": "spin-tracks/hells-scythe-ratchet.glb", "weight": 45, "defense": 7, "stamina": 3 },
   { "name": "Orbit",      "modelPath": "spin-tracks/orbit.glb",      "weight": 38, "defense": 2, "stamina": 8 },
-  { "name": "Kern",       "modelPath": "spin-tracks/kern.glb",       "weight": 40, "defense": 5, "stamina": 5 }
+  { "name": "Kern",       "modelPath": "spin-tracks/kern.glb",       "weight": 40, "defense": 5, "stamina": 5 },
+  { "name": "Turm",       "modelPath": "spin-tracks/turm.glb",       "weight": 42, "defense": 4, "stamina": 7 },
+  { "name": "Bastion",    "modelPath": "spin-tracks/bastion.glb",    "weight": 44, "defense": 6, "stamina": 4 },
+  { "name": "Feder",      "modelPath": "spin-tracks/feder.glb",      "weight": 39, "defense": 3, "stamina": 6 }
 ]

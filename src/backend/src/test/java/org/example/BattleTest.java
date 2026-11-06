@@ -92,6 +92,11 @@ class BattleTest {
         assertEquals(Math.toRadians(14), arena.pocketHalfWidth(), 1e-12);
         assertEquals(arena, Arena.find("standard").orElseThrow());
         assertTrue(Arena.find("gibt-es-nicht").isEmpty());
+
+        Arena krater = Arena.find("krater").orElseThrow();
+        assertEquals(List.of(0.0, Math.PI), krater.pockets());
+        assertEquals(Math.toRadians(22), krater.pocketHalfWidth(), 1e-12);
+        assertEquals(List.of(Arena.standard(), krater), Arena.all());
     }
 
     private static void assertConsistent(BattleOutcome o) {
