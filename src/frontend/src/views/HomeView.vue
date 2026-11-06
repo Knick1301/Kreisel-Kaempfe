@@ -1,15 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  fetchBeyblades,
-  fetchStats,
-  quickMatch,
-  type BattleReport,
-  type BeybladeDto,
-  type PlayerStats,
-} from '@/api'
-import BattleResultDialog from '@/components/BattleResultDialog.vue'
+import { fetchBeyblades, fetchStats, type BeybladeDto, type PlayerStats } from '@/api'
 import { useModelUrls } from '@/composables/useModelUrls'
 import { player } from '@/player'
 import { hasWebGL } from '@/webgl'
@@ -96,34 +88,11 @@ function openMode(to: string | null) {
   if (to) router?.push(to)
 }
 
-const matching = ref(false)
-const matchError = ref<string | null>(null)
-const report = ref<BattleReport | null>(null)
-
-async function startQuickMatch() {
-  if (!beyblade.value || matching.value) return
-  matching.value = true
-  matchError.value = null
-  spinKey.value++
-  try {
-    const [result] = await Promise.all([
-      quickMatch(beyblade.value.id),
-      new Promise((r) => setTimeout(r, 900)),
-    ])
-    report.value = result
-    fetchStats()
-      .then((s) => (playerStats.value = s))
-      .catch(() => {})
-  } catch (e) {
-    matchError.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    matching.value = false
-  }
-}
-
-function again() {
-  report.value = null
-  startQuickMatch()
+/** Schnelles Match: sofort in den Kampf gegen einen zufälligen KI-Gegner. */
+function startQuickMatch() {
+  if (!beyblade.value) return
+  setActiveId(beyblade.value.id)
+  router?.push({ name: 'kampf', query: { bey: beyblade.value.id } })
 }
 
 const leagueProgress = (player.leaguePoints / player.leaguePointsMax) * 100
@@ -242,20 +211,13 @@ const webgl = hasWebGL()
       </div>
 
       <div class="cta-wrap">
-        <button
-          type="button"
-          class="mode cta"
-          :disabled="!beyblade || matching"
-          @click="startQuickMatch"
-        >
-          <span class="cta-label">{{ matching ? 'Suche Gegner …' : 'Schnelles Match' }}</span>
+        <button type="button" class="mode cta" :disabled="!beyblade" @click="startQuickMatch">
+          <span class="cta-label">Schnelles Match</span>
           <span class="cta-arrow" aria-hidden="true">→</span>
         </button>
-        <p class="cta-sub">{{ matchError ?? 'Zufälliger Gegner · Matchmaking' }}</p>
+        <p class="cta-sub">Zufälliger KI-Gegner · sofort loslegen</p>
       </div>
     </div>
-
-    <BattleResultDialog v-if="report" :report="report" @close="report = null" @again="again" />
   </main>
 </template>
 

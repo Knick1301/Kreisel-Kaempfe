@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   createLobby,
   fetchBeyblades,
@@ -8,11 +9,9 @@ import {
   joinLobby,
   leaveLobby,
   startLobby,
-  type BattleReport,
   type BeybladeDto,
   type LobbyDto,
 } from '@/api'
-import BattleResultDialog from '@/components/BattleResultDialog.vue'
 import { auth } from '@/auth'
 import { pickActive } from '@/activeBeyblade'
 
@@ -24,7 +23,7 @@ const beyblades = ref<BeybladeDto[]>([])
 const beybladeId = ref<number | null>(null)
 const openLobbies = ref<LobbyDto[]>([])
 const current = ref<LobbyDto | null>(null)
-const report = ref<BattleReport | null>(null)
+const router = useRouter()
 const lobbyName = ref(`${me}s Lobby`)
 const code = ref('')
 const busy = ref(false)
@@ -75,10 +74,15 @@ onMounted(async () => {
 })
 onUnmounted(() => clearInterval(timer))
 
+/** Sobald der Kampf feststeht, sehen beide Spieler ihn in der Arena (Replay per Seed). */
+function watchFight(id: number) {
+  router.push({ name: 'kampf-replay', params: { id: String(id) } })
+}
+
 watch(
   () => current.value?.result,
   (r) => {
-    if (r && !report.value) report.value = r
+    if (r) watchFight(r.id)
   },
 )
 
@@ -97,8 +101,8 @@ const join = (id: string) =>
 
 const start = () =>
   run(async () => {
-    report.value = await startLobby(current.value!.id)
-    current.value = await fetchLobby(current.value!.id)
+    const result = await startLobby(current.value!.id)
+    watchFight(result.id)
   })
 
 const leave = () =>
@@ -107,7 +111,6 @@ const leave = () =>
       await leaveLobby(current.value.id)
     }
     current.value = null
-    report.value = null
     await refresh()
   })
 
@@ -250,8 +253,6 @@ const statusText = computed(() => {
         </section>
       </div>
     </div>
-
-    <BattleResultDialog v-if="report" :report="report" :again="false" @close="report = null" />
   </main>
 </template>
 

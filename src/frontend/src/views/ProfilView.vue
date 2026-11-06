@@ -10,6 +10,7 @@ import {
   type PlayerStats,
 } from '@/api'
 import { auth, clearSession, initials } from '@/auth'
+import { formatClock } from '@/game/playback'
 
 const router = useRouter()
 const me = auth.username
@@ -56,6 +57,10 @@ async function signOut() {
           <dt class="label">Rang</dt>
           <dd class="mono">{{ stats?.rank ? `#${stats.rank}` : '–' }}</dd>
         </div>
+        <div>
+          <dt class="label">Gegen KI</dt>
+          <dd class="mono">{{ stats ? `${stats.botWins ?? 0}:${stats.botLosses ?? 0}` : '–' }}</dd>
+        </div>
       </dl>
     </header>
 
@@ -71,12 +76,21 @@ async function signOut() {
           </div>
           <ul v-else class="history">
             <li v-for="b in history" :key="b.id" :class="{ won: b.winner === me }">
-              <span class="result mono">{{ b.winner === me ? 'S' : 'N' }}</span>
-              <span class="opp">
-                vs. {{ b.winner === me ? b.loser : b.winner }}
-                <small>{{ b.winner === me ? b.loserBeyblade : b.winnerBeyblade }}</small>
-              </span>
-              <span class="mono faint">{{ FINISH_LABEL[b.finish] }} · R{{ b.rounds }}</span>
+              <RouterLink
+                :to="{ name: 'kampf-replay', params: { id: String(b.id) } }"
+                class="entry"
+                :aria-label="`Kampf #${b.id} ansehen`"
+              >
+                <span class="result mono">{{ b.winner === me ? 'S' : 'N' }}</span>
+                <span class="opp">
+                  vs. {{ b.winner === me ? b.loser : b.winner }}
+                  <small>{{ b.winner === me ? b.loserBeyblade : b.winnerBeyblade }}</small>
+                </span>
+                <span class="mono faint">
+                  {{ FINISH_LABEL[b.finish] }} ·
+                  {{ b.durationMs != null ? formatClock(b.durationMs) : `R${b.rounds}` }}
+                </span>
+              </RouterLink>
             </li>
           </ul>
         </div>
@@ -180,12 +194,20 @@ h1 {
 }
 
 .history li {
+  border-bottom: 1px solid var(--line);
+}
+
+.entry {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 14px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--line);
+  transition: background-color 0.15s;
+}
+
+.entry:hover {
+  background: var(--surface-raised);
 }
 
 .result {

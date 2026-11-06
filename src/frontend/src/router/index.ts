@@ -38,6 +38,18 @@ const router = createRouter({
       meta: { title: 'Lobby' },
     },
     {
+      path: '/kampf',
+      name: 'kampf',
+      component: () => import('@/views/KampfView.vue'),
+      meta: { title: 'Kampf' },
+    },
+    {
+      path: '/kampf/:id(\\d+)',
+      name: 'kampf-replay',
+      component: () => import('@/views/KampfView.vue'),
+      meta: { title: 'Replay' },
+    },
+    {
       path: '/profil',
       name: 'profil',
       component: () => import('@/views/ProfilView.vue'),

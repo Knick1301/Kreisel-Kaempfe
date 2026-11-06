@@ -1,14 +1,57 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
-import { FINISH_LABEL, type BattleReport } from '@/api'
+import { ARCHETYPE_LABEL, FINISH_LABEL, type BattleReport, type Side } from '@/api'
 import { auth } from '@/auth'
+import { fighterOf, formatClock, matchupLabel, other } from '@/game/playback'
 
-const props = withDefaults(defineProps<{ report: BattleReport; again?: boolean }>(), {
-  again: true,
+const props = withDefaults(
+  defineProps<{
+    report: BattleReport
+    again?: boolean
+    /** Seite des Spielers; ohne Angabe über den Benutzernamen bestimmt */
+    mySide?: Side
+    /** Button für die Wiedergabe anzeigen (gleicher Seed, kein neuer Kampf) */
+    replay?: boolean
+    replayLabel?: string
+    againLabel?: string
+    note?: string | null
+  }>(),
+  {
+    again: true,
+    mySide: undefined,
+    replay: false,
+    replayLabel: 'Replay',
+    againLabel: 'Nochmal kämpfen',
+    note: null,
+  },
+)
+const emit = defineEmits<{ close: []; again: []; replay: [] }>()
+
+const won = computed(() =>
+  props.mySide && props.report.winnerSide
+    ? props.report.winnerSide === props.mySide
+    : props.report.winner === auth.username,
+)
+const side = computed<Side>(() => {
+  if (props.mySide) return props.mySide
+  const w = props.report.winnerSide
+  return w ? (won.value ? w : other(w)) : 'A'
 })
-const emit = defineEmits<{ close: []; again: [] }>()
-
-const won = computed(() => props.report.winner === auth.username)
+const duration = computed(() =>
+  props.report.durationMs != null
+    ? formatClock(props.report.durationMs)
+    : `Runde ${props.report.rounds}`,
+)
+const hits = computed(() => {
+  const h = props.report.timeline?.hits
+  return h ? { mine: h[side.value], theirs: h[other(side.value)] } : null
+})
+const matchup = computed(() => {
+  const mine = fighterOf(props.report, side.value)
+  const theirs = fighterOf(props.report, other(side.value))
+  if (!mine || !theirs) return null
+  return `${ARCHETYPE_LABEL[mine.archetype]} vs ${ARCHETYPE_LABEL[theirs.archetype]} · ${matchupLabel(props.report.matchup, side.value)}`
+})
 const me = computed(() =>
   won.value
     ? { name: props.report.winner, bey: props.report.winnerBeyblade }
@@ -39,7 +82,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <h2 id="result-title" class="verdict" :class="{ lost: !won }">
           {{ won ? 'Sieg' : 'Niederlage' }}
         </h2>
-        <p class="how mono">{{ FINISH_LABEL[report.finish] }} · Runde {{ report.rounds }}</p>
+        <p class="how mono">{{ FINISH_LABEL[report.finish] }} · {{ duration }}</p>
+
+        <dl v-if="hits || matchup" class="facts">
+          <div v-if="hits">
+            <dt>Treffer</dt>
+            <dd class="mono">Du {{ hits.mine }} · Gegner {{ hits.theirs }}</dd>
+          </div>
+          <div v-if="matchup">
+            <dt>Matchup</dt>
+            <dd>{{ matchup }}</dd>
+          </div>
+        </dl>
+        <p v-if="note" class="note">{{ note }}</p>
 
         <div class="versus">
           <div class="side" :class="{ winner: won }">
@@ -57,8 +112,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
         <div class="actions">
           <button type="button" class="btn-secondary" @click="emit('close')">Schließen</button>
+          <button v-if="replay" type="button" class="btn-secondary" @click="emit('replay')">
+            {{ replayLabel }}
+          </button>
           <button v-if="again" type="button" class="cta small" @click="emit('again')">
-            <span>Nochmal</span>
+            <span>{{ againLabel }}</span>
             <span class="cta-arrow" aria-hidden="true">→</span>
           </button>
         </div>
@@ -101,6 +159,36 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   font-size: 0.8rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.facts {
+  display: grid;
+  margin: -12px 0 22px;
+  border-top: 1px solid var(--line);
+}
+
+.facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.88rem;
+}
+
+.facts dt {
+  color: var(--text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  text-align: right;
+}
+
+.note {
+  margin: -10px 0 22px;
+  font-size: 0.85rem;
   color: var(--text-muted);
 }
 
@@ -147,6 +235,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 12px;
 }
