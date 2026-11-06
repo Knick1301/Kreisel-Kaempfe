@@ -1,0 +1,9 @@
+[
+  { "name": "Flach", "modelPath": "tips/hells-scythe-bit.glb", "weight": 4, "stamina": 3, "dash": 8 },
+  { "name": "Nadel", "modelPath": "tips/nadel.glb", "weight": 3, "stamina": 8, "dash": 2 },
+  { "name": "Kugel", "modelPath": "tips/kugel.glb", "weight": 5, "stamina": 5, "dash": 5 },
+  { "name": "Kralle", "modelPath": "tips/kralle.glb", "weight": 4, "stamina": 4, "dash": 7 },
+  { "name": "Lager", "modelPath": "tips/lager.glb", "weight": 3, "stamina": 7, "dash": 3 },
+  { "name": "Kuppel", "modelPath": "tips/kuppel.glb", "weight": 5, "stamina": 6, "dash": 4 },
+  { "name": "Speer", "modelPath": "tips/speer.glb", "weight": 4, "stamina": 5, "dash": 6 }
+]
