@@ -43,10 +43,19 @@ class MatchServiceTimeoutTest {
         MatchDto m = matches.createBotMatch("demo", bey.getId(), null);
         assertEquals(MatchStatus.LAUNCH, matches.get(m.id(), "demo").status());
 
-        matches.setClock(Clock.fixed(start.plusMillis(LaunchRules.SUBMIT_TIMEOUT_MS + 1), ZoneOffset.UTC));
+        Instant expired = start.plusMillis(LaunchRules.SUBMIT_TIMEOUT_MS + 1);
+        matches.setClock(Clock.fixed(expired, ZoneOffset.UTC));
+        MatchDto fight = matches.get(m.id(), "demo");
+        assertEquals(MatchStatus.FIGHT, fight.status());
+        assertNotNull(fight.report());
+        assertTrue(fight.report().fighters().getFirst().launch().missed());
+
+        // Wer nach dem Anspinnen verschwindet, wird nach Kampfende plus Spielraum trotzdem gewertet
+        Instant late = expired.plusMillis(fight.report().durationMs()).plus(MatchService.FIGHT_GRACE).plusMillis(1);
+        matches.setClock(Clock.fixed(late, ZoneOffset.UTC));
         MatchDto done = matches.get(m.id(), "demo");
         assertEquals(MatchStatus.DONE, done.status());
-        assertNotNull(done.report());
-        assertTrue(done.report().fighters().getFirst().launch().missed());
+        assertNotNull(done.battleId());
+        assertEquals(fight.report().durationMs(), done.report().durationMs());
     }
 }

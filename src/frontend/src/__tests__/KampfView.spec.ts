@@ -31,7 +31,7 @@ const bey = {
 
 const challenge: LaunchChallenge = {
   windowMs: 3000,
-  maxTaps: 3,
+  maxTaps: 1,
   periodMs: 1400,
   zones: [0.2, 0.5, 0.8],
   zoneHalf: 0.05,
@@ -153,27 +153,35 @@ describe('KampfView', () => {
     expect(wrapper.text()).toContain('KI-Gegner')
     expect(wrapper.find('.cta').text()).toContain('Anspinnen')
 
-    // Anspinnen: Zeiger läuft, dreimal tippen (Leertaste)
+    // Anspinnen: Zeiger läuft, einmal spannen (Leertaste halten) und nach rechts loslassen
     await wrapper.find('button.cta').trigger('click')
     await flushPromises()
     expect(wrapper.find('.launchpad').exists()).toBe(true)
     expect(wrapper.findAll('.launchpad .zone')).toHaveLength(3)
     await vi.advanceTimersByTimeAsync(900 + 300)
-    for (let i = 0; i < 3; i++) {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ' }))
-      await vi.advanceTimersByTimeAsync(400)
-    }
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ' }))
+    await vi.advanceTimersByTimeAsync(600)
+    // Halten allein startet noch nicht, die Spannung steigt
+    expect(launched).toBeNull()
+    expect(wrapper.findAll('.launchpad .mark')).toHaveLength(0)
+    expect(wrapper.find('.launchpad .meter.power').text()).toMatch(/%/)
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space', key: ' ' }))
+    await vi.advanceTimersByTimeAsync(50)
     await flushPromises()
 
     expect(launched).not.toBeNull()
-    // jeder Tap ist sichtbar: Pips verbraucht, Markierung im Balken, kurzer Text darüber
-    expect(wrapper.findAll('.launchpad .pips i.open')).toHaveLength(0)
-    expect(wrapper.findAll('.launchpad .mark')).toHaveLength(3)
-    expect(wrapper.findAll('.launchpad .popup').length).toBeGreaterThan(0)
-    const { taps } = launched!
-    expect(taps).toHaveLength(3)
+    expect(launched!.aim).toBe(1)
+    // ein Loslassen, gut zwei Drittel gespannt, Tastatur-Tempo
+    const { taps, pull, speed } = launched!
+    expect(taps).toHaveLength(1)
     expect(taps[0]!).toBeGreaterThan(0)
-    expect(taps[2]!).toBeGreaterThan(taps[1]!)
+    expect(pull!).toBeGreaterThan(0.6)
+    expect(pull!).toBeLessThan(0.75)
+    expect(speed).toBe(0.6)
+    // sichtbar: Markierung im Balken und kurzer Text darüber
+    expect(wrapper.findAll('.launchpad .mark')).toHaveLength(1)
+    expect(wrapper.findAll('.launchpad .popup').length).toBeGreaterThan(0)
     await vi.advanceTimersByTimeAsync(400)
     expect(wrapper.find('.launchpad .banner').exists()).toBe(true)
 

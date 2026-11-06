@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useLoop, useTres } from '@tresjs/core'
 import {
   Fog,
@@ -10,6 +10,7 @@ import {
   PlaneGeometry,
   RingGeometry,
   TOUCH,
+  Vector2,
   Vector3,
   type BufferAttribute,
   type Mesh,
@@ -25,17 +26,27 @@ import { CameraDirector } from '@/game/cameraDirector'
 import {
   createPartPoses,
   createPose,
+  type ClashMark,
   type Choreography,
   type FighterPose,
 } from '@/game/choreographer'
+import { CRITICAL_HIT } from '@/game/hitKind'
 import type { BattleClock } from '@/game/clock'
 import { modelKey } from '@/game/partDesigns'
+import { ultWindows } from '@/game/playback'
 import { hashString, seededStream } from '@/game/prng'
+import { ULT_COLOR } from '@/game/ult'
 import StudioEnvironment from '../StudioEnvironment.vue'
 import { makeShadowTexture } from '../textures'
 import BattleBowl from './BattleBowl.vue'
 import BattleFighter from './BattleFighter.vue'
-import { SparkPool } from './sparks'
+import { rgb, SparkPool } from './sparks'
+import { UltFx } from './ultFx'
+
+const emit = defineEmits<{
+  /** frischer Treffer mit Position auf der Bühne (0–1, oben links = 0/0) für die Treffer-Anzeige */
+  hit: [clash: ClashMark, x: number, y: number]
+}>()
 
 const props = defineProps<{
   report: BattleReport
@@ -105,6 +116,7 @@ const canvas = () => (renderer as WebGLRenderer).domElement
 let controls: OrbitControls | null = null
 let manual = false
 const tmpPos = new Vector3()
+const hitPos = new Vector3()
 
 function setupControls(cam: PerspectiveCamera) {
   const c = new OrbitControls(cam, canvas())
@@ -201,6 +213,97 @@ onUnmounted(() => {
   }
 })
 
+// ---------------------------------------------------------------- Ult-Effekte
+// Feuer, Blitze, Energie-Kuppel, Wirbelsturm: siehe ultFx.ts
+const ults = computed(() => ultWindows(props.report.timeline?.events ?? []))
+const fx = new UltFx(props.calm)
+const viewport = new Vector2()
+onUnmounted(() => fx.dispose())
+
+// ---------------------------------------------------------------- Schockwellen und Lichtsäulen
+// Schockwelle: flacher Ring am Boden, der schnell aufgeht und verblasst (Treffer, Ult-Auslösen).
+interface Wave {
+  ring: ThreeMesh
+  start: number
+  duration: number
+  size: number
+  opacity: number
+}
+const waves: Wave[] = Array.from({ length: 10 }, () => ({
+  ring: flatRing(0.86, 1, '#ffffff', 0),
+  start: -Infinity,
+  duration: 1,
+  size: 1,
+  opacity: 0,
+}))
+let nextWave = 0
+const waveGroup = new Group()
+waveGroup.add(...waves.map((w) => w.ring))
+
+function spawnWave(
+  x: number,
+  y: number,
+  z: number,
+  color: string,
+  size: number,
+  t: number,
+  duration = 420,
+  opacity = 0.8,
+) {
+  if (props.calm) return
+  const w = waves[nextWave]!
+  nextWave = (nextWave + 1) % waves.length
+  w.ring.position.set(x, y + 0.03, z)
+  ;(w.ring.material as ThreeBasicMaterial).color.set(color)
+  w.start = t
+  w.duration = duration
+  w.size = size
+  w.opacity = opacity
+}
+
+function placeWaves(t: number) {
+  for (const w of waves) {
+    const mat = w.ring.material as ThreeBasicMaterial
+    const u = (t - w.start) / w.duration
+    if (u < 0 || u > 1) {
+      mat.opacity = 0
+      continue
+    }
+    const ease = 1 - (1 - u) * (1 - u) * (1 - u)
+    w.ring.scale.setScalar(Math.max(0.01, w.size * (0.1 + 0.9 * ease)))
+    mat.opacity = w.opacity * (1 - u)
+  }
+}
+
+let nextUlt = 0
+let flashColor = '#fff1d6'
+
+/** Neue Ults zünden: Partikel-Explosion in der Ult-Farbe, Blitzlicht, Ruck. */
+function triggerUlts(t: number) {
+  const list = ults.value
+  while (nextUlt < list.length && list[nextUlt]!.start <= t) {
+    const w = list[nextUlt++]!
+    if (t - w.start > 250) continue
+    const pose = w.side === 'A' ? poseA : poseB
+    const color = ULT_COLOR[w.ult]
+    const y = groundAt(pose.x, pose.z)
+    fx.burst(pose, w.ult, w.power, color)
+    if (!props.calm) {
+      flash = Math.max(flash, 1.1)
+      flashColor = color
+      flashLight.value?.position.set(pose.x, y + 0.8, pose.z)
+      director.kick(0.12)
+    }
+  }
+}
+
+onUnmounted(() => {
+  for (const m of waves.map((w) => w.ring)) {
+    m.geometry.dispose()
+    ;(m.material as ThreeBasicMaterial).dispose()
+  }
+})
+
 // Nach dem Anspinnen wechselt die Wartestellung zur echten Choreografie, die Kamera fährt ohne Sprung weiter.
 watch(
   () => props.choreo,
@@ -236,8 +339,11 @@ onBeforeRender(({ delta }) => {
   if (t < lastT - 50) {
     nextClash = 0
     nextLanding = 0
+    nextUlt = 0
     flash = 0
     sparks.clear()
+    for (const w of waves) w.start = -Infinity
+    fx.reset()
   }
   lastT = t
 
@@ -248,6 +354,10 @@ onBeforeRender(({ delta }) => {
   fighterB.value?.apply(poseB, burst && c.loser === 'B' ? parts : null)
 
   placeImpacts(c, t)
+  triggerUlts(t)
+  ;(renderer as WebGLRenderer).getDrawingBufferSize(viewport)
+  fx.setViewport(viewport.x, viewport.y)
+  fx.update(t, delta, { A: poseA, B: poseB }, ults.value, !!props.solo)
 
   const fade = (pose: FighterPose) => (pose.burst ? Math.max(0, 1 - (t - c.finishMs) / 300) : 1)
   placeShadow(shadowA.value, poseA, fade(poseA))
@@ -257,15 +367,61 @@ onBeforeRender(({ delta }) => {
     const clash = c.clashes[nextClash++]!
     // Nur frische Treffer zünden, beim Überspringen nicht alles auf einmal
     if (t - clash.t > 250) continue
-    sparks.spawn(clash.x, clash.y, clash.z, clash.nx, clash.nz, clash.intensity, sparkRng)
+    const power = Math.min(1, clash.intensity * 1.25)
+    const ground = groundAt(clash.x, clash.z)
+    sparks.spawn(clash.x, clash.y, clash.z, clash.nx, clash.nz, power, sparkRng)
+    // kritisch: zweiter Funkenstoß in Gegenrichtung
+    if (!clash.deflected && clash.intensity >= CRITICAL_HIT) {
+      sparks.spawn(clash.x, clash.y, clash.z, -clash.nx, -clash.nz, power, sparkRng)
+    }
+    // Position auf dem Bildschirm für die Treffer-Anzeige
+    hitPos.set(clash.x, clash.y + 0.35, clash.z).project(cam)
+    if (hitPos.z < 1) emit('hit', clash, (hitPos.x + 1) / 2, (1 - hitPos.y) / 2)
+    if (!clash.deflected || clash.intensity > 0.4) fx.hitFlash(clash.x, clash.y, clash.z, power)
+    if (clash.ult === 'SMASH') {
+      // Vernichtungsschlag: Feuerstoß in alle Richtungen, Druckwelle
+      const red = rgb(ULT_COLOR.SMASH)
+      sparks.spawn(clash.x, clash.y, clash.z, -clash.nx, -clash.nz, 1, sparkRng, red, 1)
+      fx.smashImpact(clash.x, clash.y, clash.z)
+      spawnWave(clash.x, ground, clash.z, '#ffffff', BEY_SIZE * 3.5, t, 320, 0.7)
+    } else if (clash.ult === 'SHIELD' && clash.deflected) {
+      const def = clash.attacker === 'A' ? 'B' : 'A'
+      fx.shieldHit(def, clash.x, clash.z, def === 'A' ? poseA : poseB)
+    } else if (clash.intensity >= 0.35) {
+      // harter Treffer: Druckwelle am Boden, je härter desto größer
+      const color = '#ffffff'
+      spawnWave(
+        clash.x,
+        ground,
+        clash.z,
+        color,
+        BEY_SIZE * (0.8 + 2.6 * clash.intensity),
+        t,
+        380,
+        0.35 + 0.5 * clash.intensity,
+      )
+    }
     if (!props.calm) {
-      flash = Math.max(flash, clash.intensity + (clash.final ? 0.6 : 0))
+      flash = Math.max(flash, power + (clash.final ? 0.6 : 0) + (clash.ult === 'SMASH' ? 1.2 : 0))
+      flashColor = clash.ult === 'SMASH' ? ULT_COLOR.SMASH : '#fff1d6'
       flashLight.value?.position.set(clash.x, clash.y + 0.4, clash.z)
     }
   }
+  placeWaves(t)
   sparks.update(delta)
-  flash *= Math.exp(-delta / 0.08)
-  if (flashLight.value) flashLight.value.intensity = flash * 30
+  flash *= Math.exp(-delta / 0.1)
+  if (flashLight.value) {
+    // Ein einziges Licht für Treffer-Blitze und Ult-Leuchten (jedes weitere Licht kostet überall Leistung)
+    const glow = fx.glow()
+    if (glow && glow.intensity > flash * 34) {
+      flashLight.value.intensity = glow.intensity
+      flashLight.value.color.copy(glow.color)
+      flashLight.value.position.copy(glow.position)
+    } else {
+      flashLight.value.intensity = flash * 34
+      flashLight.value.color.set(flashColor)
+    }
+  }
 
   director.update(delta, t, poseA, poseB, c.winner === 'A' ? poseA : poseB)
   if (manual) {
@@ -315,4 +471,6 @@ onBeforeRender(({ delta }) => {
 
   <primitive :object="sparks.object" />
   <primitive :object="impactGroup" />
+  <primitive :object="fx.object" />
+  <primitive :object="waveGroup" />
 </template>

@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { fetchLeaderboard, type Leaderboard } from '@/api'
 import { me, refreshMe } from '@/stores/me'
 import LeagueBadge from '@/components/LeagueBadge.vue'
+import { allDivisions, lp } from '@/game/league'
+
+const divisions = allDivisions()
 
 const fmt = new Intl.NumberFormat('de-DE')
 const rankNo = (n: number) => (n < 100 ? String(n).padStart(2, '0') : fmt.format(n))
@@ -41,7 +44,7 @@ const totals = computed(() => {
 const kpis = computed(() => {
   const t = totals.value
   return [
-    { label: 'Liga-Punkte', value: rank.value ? fmt.format(rank.value.rating) : '–' },
+    { label: 'Liga-Punkte', value: rank.value ? fmt.format(lp(rank.value.rating)) : '–' },
     { label: 'Siege', value: t ? fmt.format(t.wins) : '–' },
     {
       label: 'Siegquote',
@@ -175,7 +178,7 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
               <td>
                 <span class="chip">{{ row.wins }}S · {{ row.losses }}N</span>
               </td>
-              <td class="col-wins mono">{{ fmt.format(row.ranking.rating) }}</td>
+              <td class="col-wins mono">{{ fmt.format(lp(row.ranking.rating)) }}</td>
             </tr>
             <template v-if="meBelow">
               <tr class="gap" aria-hidden="true">
@@ -200,11 +203,35 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
                 <td>
                   <span class="chip">{{ meBelow.wins }}S · {{ meBelow.losses }}N</span>
                 </td>
-                <td class="col-wins mono">{{ fmt.format(meBelow.ranking.rating) }}</td>
+                <td class="col-wins mono">{{ fmt.format(lp(meBelow.ranking.rating)) }}</td>
               </tr>
             </template>
           </tbody>
         </table>
+      </section>
+
+      <section class="panel tiers" aria-labelledby="tiers-title">
+        <header class="panel-head">
+          <span id="tiers-title" class="label"><i class="dot" />Alle Ränge</span>
+          <span class="label">ab LP</span>
+        </header>
+        <ol class="tier-list">
+          <li
+            v-for="d in divisions"
+            :key="d.name"
+            :class="{ current: rank?.league === d.name }"
+            :aria-current="rank?.league === d.name ? 'true' : undefined"
+          >
+            <LeagueBadge :tier="d.tier" :division="d.division" :size="28" />
+            <span class="tier-name">{{ d.name }}</span>
+            <span v-if="rank?.league === d.name" class="chip">Du</span>
+            <span class="tier-lp mono">{{ fmt.format(d.fromLp) }}</span>
+          </li>
+        </ol>
+        <p class="tiers-note">
+          Gegen die KI gibt es Liga-Punkte nur bis Gold III, darüber zählen nur Kämpfe gegen
+          Spieler. Unter 0 LP fällt niemand.
+        </p>
       </section>
     </div>
   </main>
@@ -237,6 +264,48 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
 
 .backdrop line {
   stroke: var(--line);
+}
+
+.tiers {
+  margin-top: 24px;
+}
+
+.tier-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+}
+
+.tier-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+
+.tier-list li.current {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.tier-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.tier-lp {
+  color: var(--text-muted);
+}
+
+.tiers-note {
+  margin: 0;
+  padding: 0 18px 16px;
+  font-size: 0.8rem;
+  color: var(--text-faint);
 }
 
 .backdrop line.major {

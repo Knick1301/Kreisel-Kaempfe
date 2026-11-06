@@ -4,6 +4,11 @@ import jakarta.persistence.Embeddable;
 import org.example.dtos.BeybladeStats;
 import org.example.game.Fighter;
 import org.example.game.Launch;
+import org.example.game.UltInput;
+import org.example.game.UltType;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Stand eines Kämpfers zum Zeitpunkt des Kampfs. Kreisel können später geändert oder gelöscht werden,
@@ -25,6 +30,12 @@ public class FighterSnapshot {
     private Long spinTrackId;
     private Long tipId;
     private String accent;
+    /** Ult zum Zeitpunkt des Kampfs, {@code null} = passend zum Stil (Altbestand, KI-Gegner) */
+    private String ult;
+    /** Ult selbst ausgelöst (Spieler im Match mit Anspinnen), {@code null}/false = automatisch */
+    private Boolean ultManual;
+    /** Druckzeitpunkte der Ult in ms, kommagetrennt */
+    private String ultTimes;
     /** Anspinnen, {@code null} bei Kämpfen ohne Anspinnen (Altbestand, Schnelles Match, Lobby) */
     private Double launchQuality;
     /** getroffene Zonen und davon im Kern */
@@ -52,6 +63,8 @@ public class FighterSnapshot {
         s.fusionWheelId = b.getFusionWheel().getId();
         s.spinTrackId = b.getSpinTrack().getId();
         s.tipId = b.getTip().getId();
+        UltType u = b.getFusionWheel().getUlt();
+        s.ult = u == null ? null : u.name();
         return s;
     }
 
@@ -68,6 +81,9 @@ public class FighterSnapshot {
         s.spinTrackId = spinTrackId;
         s.tipId = tipId;
         s.accent = accent;
+        s.ult = ult;
+        s.ultManual = ultManual;
+        s.ultTimes = ultTimes;
         if (launch != null) {
             s.launchQuality = launch.quality();
             s.launchHits = launch.hits();
@@ -76,6 +92,27 @@ public class FighterSnapshot {
             s.launchLandingY = launch.landingY();
         }
         return s;
+    }
+
+    /** Kopie mit Ult-Eingaben. */
+    public FighterSnapshot withUltInput(UltInput input) {
+        FighterSnapshot s = withLaunch(launch());
+        if (input == null || !input.manual()) {
+            s.ultManual = null;
+            s.ultTimes = null;
+        } else {
+            s.ultManual = true;
+            s.ultTimes = String.join(",", input.times().stream().map(String::valueOf).toList());
+        }
+        return s;
+    }
+
+    /** Wie diese Seite ihre Ult auslöst. */
+    public UltInput ultInput() {
+        if (!Boolean.TRUE.equals(ultManual)) return UltInput.AUTO;
+        List<Integer> times = ultTimes == null || ultTimes.isBlank() ? List.of()
+                : Arrays.stream(ultTimes.split(",")).map(String::trim).map(Integer::valueOf).toList();
+        return UltInput.manual(times);
     }
 
     /** Ausgewerteter Start, {@code null} ohne Anspinnen. */
@@ -97,7 +134,7 @@ public class FighterSnapshot {
     }
 
     public Fighter fighter() {
-        return new Fighter(owner, beyblade, stats());
+        return new Fighter(owner, beyblade, stats(), UltType.parse(ult));
     }
 
     public String getOwner() { return owner; }

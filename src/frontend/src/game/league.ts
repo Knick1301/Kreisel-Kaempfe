@@ -14,6 +14,46 @@ export const TIERS = [
 const DIVISION_WIDTH = 50
 const ROMAN = ['', 'I', 'II', 'III']
 
+/**
+ * Intern rechnet die Liga mit Elo ab 950 (Startwert = Bronze III). Angezeigt werden Liga-Punkte ab 0,
+ * damit man nicht mit „950 LP“ auf der untersten Stufe startet. Elo hängt nur an Differenzen, die
+ * Verschiebung ändert nichts an der Rechnung.
+ */
+export const LP_BASE = TIERS[0].floor
+
+/** Angezeigte Liga-Punkte zu einem Rating. */
+export const lp = (rating: number) => Math.max(0, rating - LP_BASE)
+
+export interface Division {
+  tier: string
+  /** 1–3, null in der Meister-Liga */
+  division: number | null
+  name: string
+  /** Liga-Punkte, ab denen die Division beginnt */
+  fromLp: number
+}
+
+/** Alle Divisionen, höchste zuerst: Meister, Diamant I … Bronze III. */
+export function allDivisions(): Division[] {
+  const list: Division[] = []
+  TIERS.forEach((t, i) => {
+    if (i === TIERS.length - 1) {
+      list.push({ tier: t.name, division: null, name: t.name, fromLp: lp(t.floor) })
+      return
+    }
+    for (let step = 0; step < 3; step++) {
+      const division = 3 - step
+      list.push({
+        tier: t.name,
+        division,
+        name: `${t.name} ${ROMAN[division]}`,
+        fromLp: lp(t.floor + step * DIVISION_WIDTH),
+      })
+    }
+  })
+  return list.reverse()
+}
+
 /** Liga-Name zu einem Rating, z. B. "Silber II". */
 export function leagueOf(rating: number): string {
   let index = 0

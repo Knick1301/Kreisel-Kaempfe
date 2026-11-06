@@ -1,4 +1,4 @@
-import type { BattleReport, FighterDto, FinishType, Side } from '@/api'
+import type { BattleReport, FighterDto, FinishType, Side, UltType } from '@/api'
 import {
   arenaById,
   bowlSlope,
@@ -42,7 +42,7 @@ const GRAVITY = 14
 const MAX_CLASH_R = 2.2
 const APPROACH_S = 0.65
 const RETURN_S = 0.9
-const BOUNCE = 0.55
+const BOUNCE = 0.95
 /** Ruhehöhe der drei Teile über der Spitze (Wheel, Track, Tip). */
 export const PART_HEIGHTS = [0.5, 0.3, 0.1] as const
 
@@ -82,6 +82,8 @@ export interface ClashMark {
   deflected: boolean
   attacker: Side
   final: boolean
+  /** Treffer einer Ult (Vernichtungsschlag, Ansturm) oder Abpraller am Schild */
+  ult?: UltType
 }
 
 /** Aufsetzen nach dem Schleuder-Flug (für Funken und Aufschlagring). */
@@ -176,7 +178,7 @@ const bounceNorm = (() => {
 
 /** Abprall-Verlauf: 0 im Kontaktmoment, schnell nach außen, dann zurück. */
 function bounceShape(tau: number) {
-  return ((1 - Math.exp(-tau / 0.06)) * Math.exp(-tau / 0.4)) / bounceNorm
+  return ((1 - Math.exp(-tau / 0.05)) * Math.exp(-tau / 0.5)) / bounceNorm
 }
 
 /** Weiche Begrenzung des Radius: unterhalb von `soft` unverändert, darüber asymptotisch bis `hard`. */
@@ -412,6 +414,7 @@ export function createChoreography(report: BattleReport): Choreography {
       deflected,
       attacker: att,
       final: isFinal,
+      ult: e.ult,
     })
     prevK = kc
   })

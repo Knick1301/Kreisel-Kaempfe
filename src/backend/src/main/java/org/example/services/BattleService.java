@@ -2,6 +2,7 @@ package org.example.services;
 
 import org.example.config.SystemUserSeeder;
 import org.example.dtos.ArenaDto;
+import org.example.dtos.UltDto;
 import org.example.dtos.BattleReportDto;
 import org.example.dtos.BeybladeStats;
 import org.example.dtos.FighterDto;
@@ -127,9 +128,37 @@ public class BattleService {
     @Transactional
     public BattleResult resolveLaunched(BattleMode mode, Arena arena, String variant, Long userA, FighterSnapshot a,
                                         Launch launchA, Long userB, FighterSnapshot b, Launch launchB) {
+        return commit(simulate(mode, arena, variant, userA, a.withLaunch(launchA), userB, b.withLaunch(launchB),
+                random.nextLong() & SEED_MASK));
+    }
+
+    /** Neuer Seed für einen Kampf, der erst vorläufig simuliert und später gespeichert wird. */
+    public long newSeed() {
+        return random.nextLong() & SEED_MASK;
+    }
+
+    /**
+     * Simuliert einen Kampf, ohne ihn zu speichern oder zu werten (Match während des Kampfs, solange der Spieler
+     * noch seine Ult auslösen kann). Gleiche Eingaben und gleicher Seed ergeben genau diesen Kampf auch beim
+     * späteren {@link #commit}.
+     */
+    @Transactional(readOnly = true)
+    public BattleResult simulate(BattleMode mode, Arena arena, String variant, Long userA, FighterSnapshot a,
+                                 Long userB, FighterSnapshot b, long seed) {
         User ua = users.findById(userA).orElseThrow();
         User ub = users.findById(userB).orElseThrow();
-        return simulateAndSave(mode, arena, variant, ua, a.withLaunch(launchA), ub, b.withLaunch(launchB));
+        BattleOutcome outcome = new Battle(arena, a.fighter(), b.fighter(), seed, a.launch(), b.launch(),
+                BattleTuning.SIM_VERSION, a.ultInput(), b.ultInput()).run();
+        return toResult(mode, arena, variant, ua, a, ub, b, seed, outcome);
+    }
+
+    /** Vorläufigen Kampf speichern und Liga-Punkte und XP verbuchen. */
+    @Transactional
+    public BattleResult commit(BattleResult r) {
+        r.setWinner(users.findById(r.getWinner().getId()).orElseThrow());
+        r.setLoser(users.findById(r.getLoser().getId()).orElseThrow());
+        ranking.apply(r);
+        return results.save(r);
     }
 
     @Transactional
@@ -157,7 +186,13 @@ public class BattleService {
         userB = users.findById(userB.getId()).orElseThrow();
         long seed = random.nextLong() & SEED_MASK;
         BattleOutcome outcome = new Battle(arena, a.fighter(), b.fighter(), seed, a.launch(), b.launch()).run();
+        BattleResult result = toResult(mode, arena, variant, userA, a, userB, b, seed, outcome);
+        ranking.apply(result);
+        return results.save(result);
+    }
 
+    private static BattleResult toResult(BattleMode mode, Arena arena, String variant, User userA, FighterSnapshot a,
+                                         User userB, FighterSnapshot b, long seed, BattleOutcome outcome) {
         boolean aWon = outcome.winnerSide() == Side.A;
         BattleResult result = new BattleResult();
         result.setMode(mode);
@@ -174,8 +209,7 @@ public class BattleService {
         result.setArenaVariant(arena.variantOrDefault(variant));
         result.setFighterA(a);
         result.setFighterB(b);
-        ranking.apply(result);
-        return results.save(result);
+        return result;
     }
 
     /**
@@ -193,10 +227,11 @@ public class BattleService {
         Optional<Arena> arena = Arena.find(r.getArena());
         if (arena.isEmpty()) return Optional.empty();
         BattleOutcome o = new Battle(arena.get(), r.getFighterA().fighter(), r.getFighterB().fighter(),
-                r.getSeed(), r.getFighterA().launch(), r.getFighterB().launch()).run();
+                r.getSeed(), r.getFighterA().launch(), r.getFighterB().launch(),
+                r.getSimVersion(), r.getFighterA().ultInput(), r.getFighterB().ultInput()).run();
         if (o.winnerSide() != r.getWinnerSide() || o.finish() != r.getFinish()
                 || !Integer.valueOf(o.durationMs()).equals(r.getDurationMs())) {
-            log.warn("Replay von Kampf {} weicht vom gespeicherten Ergebnis ab", r.getId());
+            if (r.getId() != null) log.warn("Replay von Kampf {} weicht vom gespeicherten Ergebnis ab", r.getId());
             return Optional.empty();
         }
         return Optional.of(o);
@@ -232,7 +267,8 @@ public class BattleService {
                 .map(list -> list.stream().map(PartDto::from).toList())
                 .orElse(null);
         return new FighterDto(side, s.getOwner(), bot, s.getBeyblade(), s.stats(), StyleDto.from(style),
-                style.archetype(), partDtos, s.getAccent(), LaunchDto.from(s.launch()));
+                style.archetype(), partDtos, s.getAccent(), LaunchDto.from(s.launch()),
+                UltDto.of(s.fighter().ult()));
     }
 
     @Transactional(readOnly = true)

@@ -11,9 +11,12 @@ import java.util.List;
  * @param energyB  Spin-Energie von B, normalisiert 0–1
  * @param hitsA    Volltreffer (nicht abgewehrte Clashes) von A
  * @param hitsB    Volltreffer von B
+ * @param ultA     Ult-Leiste von A (0–1) im selben Raster, leer bei Kämpfen ohne Ults
+ * @param ultB     Ult-Leiste von B
  */
 public record BattleTimeline(int sampleMs, List<Double> energyA, List<Double> energyB,
-                             List<TimelineEvent> events, int hitsA, int hitsB) {
+                             List<TimelineEvent> events, int hitsA, int hitsB,
+                             List<Double> ultA, List<Double> ultB) {
 
     public List<Double> energy(Side side) {
         return side == Side.A ? energyA : energyB;
@@ -21,5 +24,9 @@ public record BattleTimeline(int sampleMs, List<Double> energyA, List<Double> en
 
     public int hits(Side side) {
         return side == Side.A ? hitsA : hitsB;
+    }
+
+    public List<Double> ult(Side side) {
+        return side == Side.A ? ultA : ultB;
     }
 }

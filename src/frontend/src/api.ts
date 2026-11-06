@@ -8,6 +8,26 @@ export interface PartDto {
   stamina: number
   dash: number
   burstResistance: number
+  /** nur beim Fusion Wheel: dessen Ult */
+  ult?: UltType
+}
+
+/** Ult eines Kreisels, festgelegt durch sein Fusion Wheel. */
+export type UltType = 'SMASH' | 'SHIELD' | 'RUSH' | 'SURGE'
+
+export const ULT_LABEL: Record<UltType, string> = {
+  SMASH: 'Vernichtungsschlag',
+  SHIELD: 'Schildwall',
+  RUSH: 'Ansturm',
+  SURGE: 'Zweiter Wind',
+}
+
+/** Kurzbeschreibung für Baukasten und Intro. */
+export const ULT_HINT: Record<UltType, string> = {
+  SMASH: 'Ein nicht abwehrbarer Treffer mit voller Wucht, bricht Schilde.',
+  SHIELD: 'Angriffe prallen ab, der Kreisel steht fest und verliert kaum Spin.',
+  RUSH: 'Ein paar Sekunden pausenlose, harte Angriffe, kostet eigenen Spin.',
+  SURGE: 'Holt Spin zurück und senkt kurz die Reibung.',
 }
 
 export interface BeybladeStats {
@@ -139,6 +159,8 @@ export interface FighterDto {
   accent?: string
   /** Ausgewerteter Start, nur bei Kämpfen mit Anspinnen (nie vor dem Kampf). */
   launch?: LaunchResult
+  /** Ult des Kreisels (vom Fusion Wheel) */
+  ult?: { type: UltType; label: string }
 }
 
 export interface LaunchResult {
@@ -179,11 +201,17 @@ interface EventAt {
 export type TimelineEvent =
   | (EventAt & { type: 'LAUNCH' | 'TORNADO' | 'ENGAGE' | 'TIMEOUT' })
   /** angle: Polarwinkel (rad) des Treffpunkts auf der Bowl */
-  | (EventAt & { type: 'CLASH'; attacker: Side; intensity: number; angle: number })
+  /** ult: Treffer gehört zur Ult des Angreifers (SMASH, RUSH) oder prallte am Schild ab (SHIELD) */
+  | (EventAt & { type: 'CLASH'; attacker: Side; intensity: number; angle: number; ult?: UltType })
   | (EventAt & { type: 'DEFLECT'; defender: Side })
   | (EventAt & { type: 'WOBBLE' | 'BURST' | 'SPIN_OUT'; victim: Side })
   /** angle: Richtung der Tasche, pocket: Index in der Arena-Definition */
   | (EventAt & { type: 'NEAR_RING_OUT' | 'RING_OUT'; victim: Side; angle: number; pocket: number })
+  /** intensity: Stärke der Ult (vom Anspinnen), durationMs: Wirkdauer bei Schild, Ansturm, Zweiter Wind */
+  | (EventAt & { type: 'ULT'; side: Side; ult: UltType; intensity: number; durationMs?: number })
+  | (EventAt & { type: 'ULT_END'; side: Side; ult: UltType })
+  /** Leiste voll, die Ult wartet auf den Spieler */
+  | (EventAt & { type: 'ULT_READY'; side: Side; ult: UltType })
 
 export type EventType = TimelineEvent['type']
 
@@ -193,6 +221,8 @@ export interface BattleTimeline {
   energy: Record<Side, number[]>
   hits: Record<Side, number>
   events: TimelineEvent[]
+  /** Ult-Leiste 0–1 im selben Raster wie `energy`, fehlt bei Kämpfen ohne Ults */
+  ult?: Record<Side, number[]>
 }
 
 export interface BattleReport {
@@ -261,7 +291,7 @@ export interface LaunchChallenge {
   perfectQuality: number
 }
 
-export type MatchStatus = 'LAUNCH' | 'DONE'
+export type MatchStatus = 'LAUNCH' | 'FIGHT' | 'DONE'
 
 export interface MatchDto {
   id: string
@@ -280,9 +310,15 @@ export interface MatchDto {
   report?: BattleReport
 }
 
-/** Rohe Eingabe: Zeitpunkte der Taps in ms ab Start des Zeigers auf dem eigenen Gerät. */
+/** Rohe Eingabe: Moment des Loslassens (ms ab Start des Zeigers auf dem eigenen Gerät) plus Zug. */
 export interface LaunchInput {
   taps: number[]
+  /** Zugrichtung, −1 (links) bis 1 (rechts): wohin der Kreisel fliegt */
+  aim?: number
+  /** Zuglänge 0–1 */
+  pull?: number
+  /** Tempo des letzten Rucks 0–1 */
+  speed?: number
 }
 
 /** Neues Match gegen einen KI-Gegner. Der Gegner steht sofort fest, dann wird angespinnt. */
@@ -293,6 +329,18 @@ export function createBotMatch(beybladeId: number, arenaId?: string, variantId?:
 /** Eigenen Start abgeben. Hat der Gegner schon angespinnt, kommt der Kampfbericht mit. */
 export function submitLaunch(matchId: string, input: LaunchInput) {
   return request<MatchDto>('POST', `/matches/${encodeURIComponent(matchId)}/launch`, input)
+}
+
+/** Ult auslösen bei Kampfzeit `t` (ms). Antwort: der ab dem Druck neu gerechnete Kampf. */
+export function triggerUlt(matchId: string, t: number) {
+  return request<MatchDto>('POST', `/matches/${encodeURIComponent(matchId)}/ult`, {
+    t: Math.max(0, Math.round(t)),
+  })
+}
+
+/** Kampf zu Ende gesehen: Ergebnis werten und speichern lassen. */
+export function finishMatch(matchId: string) {
+  return request<MatchDto>('POST', `/matches/${encodeURIComponent(matchId)}/finish`)
 }
 
 export function fetchMatch(matchId: string) {

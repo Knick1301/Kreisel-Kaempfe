@@ -4,6 +4,7 @@ import { computed, watch } from 'vue'
 import { me, refreshMe } from '@/stores/me'
 import AppLogo from './AppLogo.vue'
 import LeagueBadge from './LeagueBadge.vue'
+import { lp } from '@/game/league'
 
 const links = [
   { to: '/', label: 'Startseite' },
@@ -55,13 +56,18 @@ watch(
     </nav>
 
     <div v-if="auth.loggedIn" class="me">
-      <RouterLink v-if="rank" to="/rangliste" class="league" :title="`${rank.rating} Liga-Punkte`">
+      <RouterLink
+        v-if="rank"
+        to="/rangliste"
+        class="league"
+        :title="`${lp(rank.rating)} Liga-Punkte`"
+      >
         <LeagueBadge :tier="rank.tier" :division="rank.division" :size="26" />
         <span class="league-text">
           <span class="league-top">
             <span>{{ rank.league }}</span>
             <span v-if="divisionSize" class="faint">{{ divisionPoints }}/{{ divisionSize }}</span>
-            <span v-else class="faint">{{ rank.rating }}</span>
+            <span v-else class="faint">{{ lp(rank.rating) }}</span>
           </span>
           <span class="league-bar"><span :style="{ width: `${rank.progress}%` }" /></span>
         </span>

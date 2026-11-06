@@ -185,7 +185,15 @@ describe('RanglisteView', () => {
     expect(wrapper.text()).toContain('#2')
     expect(wrapper.text()).toContain('Silber III')
     expect(wrapper.find('tr.me').text()).toContain('Bronze II')
-    expect(wrapper.text()).toContain('1.010')
+    // Liga-Punkte ab 0: Rating 1010 = 60 LP
+    expect(wrapper.find('tr.me td.col-wins').text()).toBe('60')
+    // alle 16 Ränge, der eigene markiert
+    const tiers = wrapper.findAll('.tier-list li')
+    expect(tiers).toHaveLength(16)
+    expect(tiers[0]!.text()).toContain('Meister')
+    expect(tiers[15]!.text()).toContain('Bronze III')
+    expect(tiers[15]!.text()).toContain('0')
+    expect(wrapper.find('.tier-list li.current').text()).toContain('Bronze II')
   })
 
   it('zeigt „Noch keine Kämpfe“ ohne Ergebnisse', async () => {

@@ -45,8 +45,13 @@ Profil). Der alte Endpunkt `POST /api/battles/bot` (sofort simuliert, ohne Anspi
 
 Jede Runde gegen die KI beginnt mit dem **Schwungmesser**. Ein Zeiger pendelt über einen Bogen, an den Enden
 langsam, in der Mitte schnell. Auf dem Bogen liegen drei Zonen (orange) mit schmalem Kern (türkis). Der
-Spieler hat **3 Sekunden und genau 3 Taps** (Klick, Finger oder Leertaste). Jeder Tap zählt für die Zone,
-in der der Zeiger gerade steht, jede Zone höchstens einmal. Ein Tap daneben ist verschenkt.
+Spieler hat **3 Sekunden und genau 3 Züge**. Ein Zug funktioniert wie eine Reißleine: gedrückt halten, ziehen
+(mindestens 28 px), loslassen. Gewertet wird der **Moment des Loslassens**, als „Tap“ an den Server geht genau
+dieser Zeitpunkt. Ein zu kurzer Zug kostet nichts. Tastatur: Leertaste halten und loslassen. Jeder Tap zählt
+für die Zone, in der der Zeiger gerade steht, jede Zone höchstens einmal. Ein Tap daneben ist verschenkt.
+
+Die **Richtung des letzten Zugs** (`aim`, −1 bis 1, Pfeiltasten bei der Tastatur) lenkt nur den Landepunkt:
+`landingY = AIM_RANGE · aim` mit `AIM_RANGE = 0,35`. Auf die Wertung hat sie keinen Einfluss.
 
 ```
 Zeiger      p(t) = ½ − ½ · cos(2π · t / Periode)          Periode 1250–1450 ms je Match
@@ -108,6 +113,59 @@ Formeln Zähler („2/3“) und Urteil sofort an. Die Kreisel warten bis dahin i
 der eigene dreht mit jedem Treffer schneller. Die Ruheposition ist genau das erste Bild der Choreografie
 (`LAUNCH_THETA`: eigener links, Gegner rechts). Im Kampf fliegt jeder Kreisel in 0,55 s in einem Bogen vom
 Launcher zu seinem Landepunkt, setzt mit Funken und Aufschlagring auf und startet von da, auch im Replay.
+
+## Ults (`UltType`, `Battle`, Abschnitt Ult in `BattleTuning`)
+
+Jedes Fusion Wheel bringt eine Ult mit (`parts/fusion-wheels.json`, Feld `ult`). Kreisel ohne Angabe, z. B.
+KI-Gegner, bekommen die Ult ihres Archetyps.
+
+| Ult | Fusion Wheels | Wirkung |
+| --- | --- | --- |
+| `SMASH` Vernichtungsschlag | Sturmklinge, Drachenzahn (Angriff) | 500 ms Ausholen, dann ein nicht abwehrbarer Treffer: Intensität · (1 + 0,7 · Stärke), 1,4-facher Spinschaden. Bricht einen Schild (dann 85 % der Wucht). |
+| `SHIELD` Schildwall | Bollwerk, Eisenmond (Verteidigung) | 3,5 s · Stärke: Abwehrchance +50 % (höchstens 95 %), keine Abwehrverluste, Reibung · 0,65. |
+| `RUSH` Ansturm | Phantom, Greif (Balance) | 3,5 s · Stärke: Clash-Rate · 3, Angriffsgewicht · 4, Mindestabstand 500 ms, Intensität · (1 + 0,2 · Stärke), eigene Reibung · 1,5. |
+| `SURGE` Zweiter Wind | Wirbel (Ausdauer) | +0,025 · Stärke Spin sofort, 3 s · Stärke Reibung · 0,8. |
+
+**Leiste** (0 bis 1, voll = Ult löst aus, frühestens ab `ENGAGE_MS`):
+
+```
+pro Sekunde        +0,025
+Volltreffer        +0,12 gelandet, +0,08 eingesteckt
+Abwehr             +0,07 abgewehrt, +0,05 eigener Angriff prallt ab
+Start              0,15 · Launch-Qualität
+```
+
+Während eine Ult läuft, lädt die Leiste nicht. **Stärke** = 0,85 + 0,25 · Qualität (+0,1 bei perfektem Start),
+ohne Anspinnen 1. Gutes Timing lädt also vor und macht die Ult stärker und länger. Im Schnitt löst jeder
+Kreisel gut eine Ult pro Kampf aus (2–3 pro Kampf).
+
+**Balancing:** Ohne Ults liegen die Vorteil-Typen bei 62–69 %, mit Ults bei 64–71 %, das Dreieck bleibt also
+erhalten. Perfekter gegen verpassten Start gewinnt im Spiegel bis 77 % statt bis 71 %, deshalb erlaubt
+`LaunchTest` dort jetzt bis 78 %.
+
+**Selbst auslösen (ab Version 5):** Im Match mit Anspinnen löst der Spieler seine Ult selbst aus, die KI
+weiterhin automatisch. Ist die Leiste voll, meldet die Simulation `ULT_READY` und hält die Ult, bis ein
+Druckzeitpunkt kommt (`UltInput`, die Ult löst im ersten Tick ab dem Druck aus). Ablauf im `MatchService`:
+
+```
+POST /api/matches/{id}/launch   beide angespinnt → Status FIGHT, Kampf nur vorläufig simuliert (nicht gespeichert)
+POST /api/matches/{id}/ult      { "t": Kampfzeit } → gleicher Seed, neu simuliert; bis t identisch.
+                                409, wenn die Leiste zu diesem Zeitpunkt nicht voll ist oder der Kampf vorbei ist
+POST /api/matches/{id}/finish   werten und speichern → DONE
+```
+
+Wer verschwindet oder ein neues Match startet, wird trotzdem gewertet (spätestens nach Kampfdauer plus
+`FIGHT_GRACE` = 90 s). Die Druckzeitpunkte stehen im Snapshot (`a_ult_manual`, `a_ult_times`), das Replay spielt
+sie exakt nach. Im Frontend hält die Uhr während der Anime-Einblendung an, in dieser Zeit rechnet der Server neu.
+
+Einschränkung: Der vorläufige Verlauf liegt komplett beim Client. Wer ihn ausliest, kennt die Zukunft ohne
+Ult und könnte den Druckzeitpunkt optimieren. Gegen die KI ist das egal; für PvP müsste der Server den Verlauf
+nur stückweise herausgeben.
+
+**Reibung am Anfang (ab Version 4):** Bis `ENGAGE_MS` gilt nur `TORNADO_FRICTION = 0,7` der Reibung, frisch
+angespinnte Kreisel halten ihren Spin also anfangs länger. Danach volle Reibung, damit Ausdauer ihren Vorteil
+behält. Im HUD hinterlässt jeder Treffer kurz einen roten Rest in der Spin-Leiste (`hitGhost`, 350 ms stehen,
+450 ms nachlaufen), damit man sieht, was Treffer kosten und was nur Reibung ist.
 
 ## Simulation (`org.example.game`)
 
@@ -239,8 +297,9 @@ Enum-Spalten (`finish`, `battle_mode`, `winner_side`) sind `VARCHAR`. Ein H2-`EN
 damals: Ältere Datenbanken lehnten deshalb `RING_OUT` ab. Hibernate stellt sie beim Start selbst um.
 
 Die Timeline wird **nicht** gespeichert. `GET /api/battles/{id}` simuliert neu und liefert die Timeline
-nur, wenn `sim_version` nachspielbar ist (`REPLAYABLE_VERSIONS`: 1 und 2, ohne Launch-Werte rechnet
-Version 2 wie 1) und Sieger, Finish und Dauer übereinstimmen. Sonst ist `timeline` leer und
+nur, wenn `sim_version` nachspielbar ist (`REPLAYABLE_VERSIONS`: 1 bis 4, `new Battle(…, simVersion)`
+rechnet wie die gespeicherte Version: ohne Launch-Werte rechnet Version 2 wie 1, vor Version 3 ohne Ults, vor
+Version 4 mit voller Reibung in der Tornado-Phase) und Sieger, Finish und Dauer übereinstimmen. Sonst ist `timeline` leer und
 nur das Ergebnis wird angezeigt. So widerspricht eine Animation nie einem gespeicherten Ergebnis.
 **Bei jeder Tuning-Änderung `BattleTuning.SIM_VERSION` erhöhen.**
 
@@ -295,6 +354,11 @@ Fehlercodes:
 - `angle` bei RING_OUT/NEAR_RING_OUT liegt in der Tasche `pocket`.
 - Ein DEFLECT mit gleichem `t` direkt nach einem CLASH bedeutet „abgewehrt“.
 - Weitere Finish-Events: `BURST`, `SPIN_OUT` (mit `victim`) und `TIMEOUT`.
+- Ults (ab Version 3): `{ "type": "ULT", "side": "A", "ult": "SHIELD", "intensity": 1.1, "durationMs": 3850 }`
+  (`intensity` = Stärke, `durationMs` fehlt beim Vernichtungsschlag) und `ULT_END` (mit `side`, `ult`), wenn
+  die Wirkung endet oder ein Schild gebrochen wird. Ein CLASH mit `ult` gehört zu dieser Ult: `SMASH`/`RUSH`
+  des Angreifers oder `SHIELD` des Verteidigers.
+- `ult` (ab Version 3): Ult-Leiste je Seite im selben Raster wie `energy`, fehlt bei älteren Kämpfen.
 
 ## Frontend
 

@@ -7,6 +7,8 @@ import {
   createBeyblade,
   deleteBeyblade,
   updateBeyblade,
+  ULT_HINT,
+  ULT_LABEL,
   type BeybladeDto,
   type BeybladeStats,
   type PartDto,
@@ -19,6 +21,7 @@ import { designsFor, TIP_DESIGNS, TRACK_DESIGNS, WHEEL_DESIGNS, modelKey } from 
 import { hasWebGL } from '@/webgl'
 import BeybladeSpinner from '@/components/BeybladeSpinner.vue'
 import StatBar from '@/components/StatBar.vue'
+import { ULT_COLOR } from '@/game/ult'
 
 const route = useRoute()
 
@@ -205,11 +208,15 @@ function choose(kind: PartKind, id: number) {
   spinKey.value++
 }
 
+/** Ult kommt vom Fusion Wheel */
+const selectedUlt = computed(() => selectedParts.value.find((p) => p.ult)?.ult ?? null)
+
 function partLine(p: PartDto) {
   return [
     p.attack && `ANG ${p.attack}`,
     p.defense && `VER ${p.defense}`,
     p.stamina && `AUS ${p.stamina}`,
+    p.ult && `Ult: ${ULT_LABEL[p.ult]}`,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -364,6 +371,11 @@ const webgl = hasWebGL()
         <div class="panel-body">
           <h1 class="build-name">{{ name || 'Ohne Namen' }}</h1>
           <p class="build-parts">{{ selectedParts.map((p) => p.name).join(' · ') }}</p>
+          <p v-if="selectedUlt" class="build-ult" :style="{ '--ult': ULT_COLOR[selectedUlt] }">
+            <span class="label">Ult</span>
+            <strong>{{ ULT_LABEL[selectedUlt] }}</strong>
+            <span>{{ ULT_HINT[selectedUlt] }}</span>
+          </p>
 
           <p v-if="!preview" class="hint">Keine Vorschau verfügbar.</p>
           <template v-else>
@@ -622,6 +634,21 @@ const webgl = hasWebGL()
   line-height: 1.05;
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
+}
+
+.build-ult {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 18px;
+  padding-left: 8px;
+  border-left: 2px solid var(--ult);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.build-ult strong {
+  color: var(--ult);
+  font-weight: 600;
 }
 
 .build-parts {

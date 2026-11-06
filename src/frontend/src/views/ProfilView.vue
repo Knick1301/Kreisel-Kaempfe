@@ -6,6 +6,7 @@ import { clearMe, me as meStore, refreshMe } from '@/stores/me'
 import LeagueBadge from '@/components/LeagueBadge.vue'
 import { auth, clearSession, initials } from '@/auth'
 import { formatClock } from '@/game/playback'
+import { lp } from '@/game/league'
 
 const router = useRouter()
 const me = auth.username
@@ -117,7 +118,7 @@ async function signOut() {
         <section class="panel" aria-label="Liga und Level">
           <header class="panel-head">
             <span class="label"><i class="dot" />Liga</span>
-            <span v-if="rank" class="label">{{ rank.rating }} LP</span>
+            <span v-if="rank" class="label">{{ lp(rank.rating) }} LP</span>
           </header>
           <div class="panel-body league">
             <template v-if="rank">

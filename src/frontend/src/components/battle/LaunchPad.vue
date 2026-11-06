@@ -1,12 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { LaunchChallenge, LaunchInput, LaunchResult } from '@/api'
-import { SIGNAL, launchVerdict, needleAt, previewLaunch, zoneAt } from '@/game/launch'
+import {
+  PULL_FULL_PX,
+  SIGNAL,
+  SPEED_FULL_PX_S,
+  launchVerdict,
+  needleAt,
+  previewLaunch,
+  pullFactor,
+  zoneAt,
+} from '@/game/launch'
 
 /**
- * Anspinnen: Ein Zeiger pendelt durch einen schlichten Balken mit drei Zonen. Drei Sekunden, drei Taps
- * (Klick, Finger, Leertaste), jede Zone zählt einmal. Der helle Kern gibt volle Punkte, der Rest der Zone
- * weniger. Gemessen wird ab dem Start des Zeigers, gewertet nur auf dem Server.
+ * Anspinnen mit Reißleine: Ein Zeiger pendelt durch einen Balken mit drei Zonen. Einmal greifen (gedrückt
+ * halten), nach hinten ziehen und im richtigen Moment loslassen. Gewertet werden der Moment des Loslassens
+ * (Zone, heller Kern = voll), wie weit gezogen wurde und wie schnell der letzte Ruck war. Die Zugrichtung
+ * bestimmt, wohin der Kreisel fliegt. Tastatur: Leertaste halten (spannt), loslassen; Pfeiltasten geben die
+ * Richtung. Gemessen wird ab dem Start des Zeigers, gewertet nur auf dem Server.
  */
 const props = withDefaults(defineProps<{ challenge: LaunchChallenge; calm?: boolean }>(), {
   calm: false,
@@ -18,6 +29,15 @@ const emit = defineEmits<{
 }>()
 
 const LEAD_MS = 900
+/** So weit muss man ziehen, damit das Loslassen zählt (px). Kürzer: kein Start, nochmal greifen. */
+const MIN_PULL = 28
+/** Ab dieser seitlichen Zuglänge (px) ist die Richtung voll links/rechts. */
+const AIM_PX = 110
+/** Zeitfenster für das Tempo des letzten Rucks */
+const SPEED_WINDOW_MS = 90
+/** Tastatur: so lange halten bis zur vollen Spannung; Tempo ist mit der Taste fest */
+const KEY_FULL_MS = 900
+const KEY_SPEED = 0.6
 
 const now = () => globalThis.performance?.now() ?? Date.now()
 const raf: (cb: () => void) => number =
@@ -26,39 +46,48 @@ const raf: (cb: () => void) => number =
 const cancelRaf: (id: number) => void =
   globalThis.cancelAnimationFrame?.bind(globalThis) ?? ((id) => clearTimeout(id))
 
-type TapKind = 'core' | 'hit' | 'repeat' | 'miss'
+type Kind = 'core' | 'hit' | 'miss'
 
-interface Tap {
-  t: number
+interface Release {
   p: number
-  zone: number | null
-  score: number
-  kind: TapKind
+  kind: Kind
 }
 
 interface Popup {
   id: number
   p: number
   text: string
-  kind: TapKind
+  kind: Kind | 'short'
 }
 
-const POPUP_TEXT: Record<TapKind, string> = {
-  core: 'Kern!',
-  hit: 'Treffer',
-  repeat: 'Schon drin',
-  miss: 'Daneben',
-}
 const POPUP_MS = 750
 const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
 const t = ref(-LEAD_MS)
-const taps = ref<Tap[]>([])
+const released = ref<Release | null>(null)
 const result = ref<LaunchResult | null>(null)
 const popups = ref<Popup[]>([])
+interface Sample {
+  x: number
+  y: number
+  t: number
+}
+/** Laufender Zug: Startpunkt, aktueller Punkt und die letzten Positionen fürs Tempo */
+const grab = ref<{
+  id: number
+  x0: number
+  y0: number
+  x: number
+  y: number
+  samples: Sample[]
+} | null>(null)
+const padEl = ref<HTMLElement>()
+/** Tastatur: gehaltene Pfeiltasten und Beginn des Haltens */
+const keyAim = ref(0)
+const keyStart = ref<number | null>(null)
 const barEl = ref<HTMLElement>()
 const zoneEls = ref<HTMLElement[]>([])
-/** Ansage für Screenreader nach jedem Tap */
+/** Ansage für Screenreader */
 const announce = ref('')
 let popupId = 0
 const popupTimers = new Set<ReturnType<typeof setTimeout>>()
@@ -70,14 +99,7 @@ let verdictTimer: ReturnType<typeof setTimeout> | undefined
 const needle = computed(() =>
   needleAt(props.challenge, Math.max(0, Math.min(t.value, props.challenge.windowMs))),
 )
-/** Bester Wert je Zone bisher */
-const best = computed(() =>
-  props.challenge.zones.map((_, i) =>
-    taps.value.reduce((m, tap) => (tap.zone === i ? Math.max(m, tap.score) : m), 0),
-  ),
-)
 const finished = ref(false)
-const hits = computed(() => best.value.filter((b) => b > 0).length)
 const animated = computed(() => !props.calm && !reducedMotion)
 
 const banner = computed(() => {
@@ -100,13 +122,35 @@ const zonesGeo = computed(() =>
   })),
 )
 
+// ---------------------------------------------------------------- Spannung und Tempo
+
+/** Zuglänge 0–1 gerade (Maus/Finger oder gehaltene Taste) */
+const tension = computed(() => {
+  const g = grab.value
+  if (g) return Math.min(1, Math.hypot(g.x - g.x0, g.y - g.y0) / PULL_FULL_PX)
+  if (keyStart.value !== null) return Math.min(1, (t.value + t0 - keyStart.value) / KEY_FULL_MS)
+  return 0
+})
+
+/** Tempo 0–1 aus den letzten Positionen */
+function speedOf(samples: Sample[], at: number) {
+  const recent = samples.filter((s) => at - s.t <= SPEED_WINDOW_MS)
+  if (recent.length < 2) return 0
+  const a = recent[0]!
+  const b = recent[recent.length - 1]!
+  const dt = Math.max(16, b.t - a.t) / 1000
+  return Math.min(1, Math.hypot(b.x - a.x, b.y - a.y) / dt / SPEED_FULL_PX_S)
+}
+const liveSpeed = ref(0)
+
 // ---------------------------------------------------------------- Eingabe
 
-function finish() {
+function finish(input: LaunchInput) {
   if (done) return
   done = true
   finished.value = true
-  const input: LaunchInput = { taps: taps.value.map((x) => x.t) }
+  grab.value = null
+  keyStart.value = null
   const preview = previewLaunch(props.challenge, input)
   emit('charge', preview.quality)
   // erst kurz „Spin!“, dann das Urteil
@@ -116,30 +160,35 @@ function finish() {
   emit('launch', input, preview)
 }
 
-function tap(stamp: number) {
+/** Loslassen: Zeitpunkt, Zuglänge, Tempo und Richtung gehen an den Server. */
+function release(stamp: number, pull: number, speed: number, aim: number) {
   if (done) return
   const ms = Math.round(stamp - t0)
   if (ms < 0 || ms > props.challenge.windowMs) return
   const p = needleAt(props.challenge, ms)
   const hit = zoneAt(props.challenge, p)
-  const before = hit ? (best.value[hit.zone] ?? 0) : 0
-  // dieselbe Zone nochmal zählt nur, wenn der Tap besser ist (z. B. jetzt im Kern)
-  const kind: TapKind = !hit
-    ? 'miss'
-    : hit.score <= before
-      ? 'repeat'
-      : hit.score >= 1
-        ? 'core'
-        : 'hit'
-  taps.value = [...taps.value, { t: ms, p, zone: hit?.zone ?? null, score: hit?.score ?? 0, kind }]
+  const kind: Kind = !hit ? 'miss' : hit.score >= 1 ? 'core' : 'hit'
+  released.value = { p, kind }
+  const round = (v: number) => Math.round(v * 1000) / 1000
+  const input: LaunchInput = {
+    taps: [ms],
+    aim: round(aim),
+    pull: round(pull),
+    speed: round(speed),
+  }
   feedback(kind, p, hit?.zone ?? null)
-  beep(kind === 'core' ? 1320 : kind === 'hit' ? 880 : kind === 'repeat' ? 440 : 196)
-  emit('charge', best.value.reduce((a, b) => a + b, 0) / props.challenge.zones.length)
-  if (taps.value.length >= props.challenge.maxTaps) finish()
+  beep(kind === 'core' ? 1320 : kind === 'hit' ? 880 : 196)
+  finish(input)
 }
 
-/** Sichtbare Rückmeldung: Text über dem Tap, Zone pulsiert bei Treffer, Balken ruckt bei Fehlern. */
-function feedback(kind: TapKind, p: number, zone: number | null) {
+const POPUP_TEXT: Record<Kind | 'short', string> = {
+  core: 'Kern!',
+  hit: 'Treffer',
+  miss: 'Daneben',
+  short: 'Weiter ziehen!',
+}
+
+function popup(kind: Kind | 'short', p: number) {
   const id = ++popupId
   popups.value = [...popups.value, { id, p, text: POPUP_TEXT[kind], kind }]
   const timer = setTimeout(() => {
@@ -147,11 +196,14 @@ function feedback(kind: TapKind, p: number, zone: number | null) {
     popupTimers.delete(timer)
   }, POPUP_MS)
   popupTimers.add(timer)
-  const left = props.challenge.maxTaps - taps.value.length
-  announce.value = `${POPUP_TEXT[kind]}. ${hits.value} von 3 Zonen, noch ${left} ${left === 1 ? 'Tap' : 'Taps'}.`
+}
 
+/** Sichtbare Rückmeldung: Text über dem Zeiger, Zone pulsiert bei Treffer, Balken ruckt bei Fehlern. */
+function feedback(kind: Kind, p: number, zone: number | null) {
+  popup(kind, p)
+  announce.value = POPUP_TEXT[kind]
   if (!animated.value) return
-  if ((kind === 'core' || kind === 'hit') && zone !== null) {
+  if (kind !== 'miss' && zone !== null) {
     zoneEls.value[zone]?.animate?.(
       [
         { transform: 'scaleY(2.4)', filter: 'brightness(2.2)' },
@@ -179,26 +231,112 @@ const stampOf = (e: Event) => {
   return e.timeStamp > 0 && Math.abs(e.timeStamp - n) < 1000 ? e.timeStamp : n
 }
 
-function onPointerDown(e: PointerEvent) {
-  tap(stampOf(e))
+function local(e: PointerEvent) {
+  const r = padEl.value?.getBoundingClientRect()
+  return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) }
 }
 
-function onKeyDown(e: KeyboardEvent) {
-  if (e.code !== 'Space' && e.key !== ' ' && e.key !== 'Enter') return
-  e.preventDefault()
-  if (!e.repeat) tap(stampOf(e))
+function onPointerDown(e: PointerEvent) {
+  if (done || grab.value) return
+  const p = local(e)
+  const at = stampOf(e)
+  grab.value = { id: e.pointerId, x0: p.x, y0: p.y, x: p.x, y: p.y, samples: [{ ...p, t: at }] }
+  ;(e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId)
+  beep(330, 0.04)
 }
+
+function onPointerMove(e: PointerEvent) {
+  const g = grab.value
+  if (!g || g.id !== e.pointerId) return
+  const p = local(e)
+  const at = stampOf(e)
+  g.x = p.x
+  g.y = p.y
+  g.samples.push({ ...p, t: at })
+  if (g.samples.length > 40) g.samples.splice(0, g.samples.length - 40)
+  liveSpeed.value = speedOf(g.samples, at)
+  emit('charge', tension.value * 0.8)
+}
+
+function onPointerUp(e: PointerEvent) {
+  const g = grab.value
+  if (!g || g.id !== e.pointerId) return
+  grab.value = null
+  const at = stampOf(e)
+  const dx = g.x - g.x0
+  const len = Math.hypot(dx, g.y - g.y0)
+  if (len < MIN_PULL) {
+    popup('short', needle.value)
+    emit('charge', 0)
+    return
+  }
+  release(
+    at,
+    Math.min(1, len / PULL_FULL_PX),
+    speedOf(g.samples, at),
+    Math.max(-1, Math.min(1, dx / AIM_PX)),
+  )
+}
+
+function onPointerCancel(e: PointerEvent) {
+  if (grab.value?.id === e.pointerId) grab.value = null
+}
+
+const isPull = (e: KeyboardEvent) => e.code === 'Space' || e.key === ' ' || e.key === 'Enter'
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault()
+    keyAim.value = e.key === 'ArrowLeft' ? -1 : 1
+    return
+  }
+  if (!isPull(e)) return
+  e.preventDefault()
+  if (e.repeat || done || keyStart.value !== null) return
+  keyStart.value = stampOf(e)
+  beep(330, 0.04)
+}
+
+function onKeyUp(e: KeyboardEvent) {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    keyAim.value = 0
+    return
+  }
+  if (!isPull(e) || keyStart.value === null) return
+  e.preventDefault()
+  const at = stampOf(e)
+  const pull = Math.min(1, (at - keyStart.value) / KEY_FULL_MS)
+  keyStart.value = null
+  release(at, pull, KEY_SPEED, keyAim.value)
+}
+
+/** Leine fürs Overlay: vom Griffpunkt zur aktuellen Position, gespannt ab MIN_PULL. */
+const cord = computed(() => {
+  const g = grab.value
+  if (!g) return null
+  const len = Math.hypot(g.x - g.x0, g.y - g.y0)
+  return { x0: g.x0, y0: g.y0, x: g.x, y: g.y, taut: len >= MIN_PULL }
+})
+const holding = computed(() => !!grab.value || keyStart.value !== null)
+/** Vorschau des Zugfaktors während des Ziehens */
+const livePull = computed(() =>
+  pullFactor(tension.value, keyStart.value !== null ? KEY_SPEED : liveSpeed.value),
+)
 
 function loop() {
   t.value = now() - t0
-  if (!done && t.value > props.challenge.windowMs) finish()
+  // Tempo klingt ab, wenn die Hand stillhält
+  const g = grab.value
+  if (g) liveSpeed.value = speedOf(g.samples, now())
+  else if (keyStart.value !== null) emit('charge', tension.value * 0.8)
+  if (!done && t.value > props.challenge.windowMs) finish({ taps: [] })
   if (!done) frame = raf(loop)
 }
 
 // ---------------------------------------------------------------- Klick-Ton
 
 let audio: AudioContext | null = null
-function beep(freq: number) {
+function beep(freq: number, gainLevel = 0.09) {
   try {
     const Ctx =
       globalThis.AudioContext ??
@@ -210,7 +348,7 @@ function beep(freq: number) {
     const gain = audio.createGain()
     osc.frequency.value = freq
     gain.gain.setValueAtTime(0.0001, at)
-    gain.gain.exponentialRampToValueAtTime(0.09, at + 0.006)
+    gain.gain.exponentialRampToValueAtTime(gainLevel, at + 0.006)
     gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.14)
     osc.connect(gain).connect(audio.destination)
     osc.start(at)
@@ -223,6 +361,7 @@ function beep(freq: number) {
 onMounted(() => {
   t0 = now() + LEAD_MS
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
   frame = raf(loop)
 })
 
@@ -231,6 +370,7 @@ onUnmounted(() => {
   clearTimeout(verdictTimer)
   popupTimers.forEach((x) => clearTimeout(x))
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
   void audio?.close().catch(() => undefined)
   emit('charge', 0)
 })
@@ -238,42 +378,55 @@ onUnmounted(() => {
 
 <template>
   <div
+    ref="padEl"
     class="launchpad"
+    :class="{ holding }"
     role="application"
-    aria-label="Anspinnen: Der Zeiger läuft durch den Balken. Dreimal tippen (Klick, Finger oder Leertaste), wenn er in einer der drei Zonen steht."
+    aria-label="Anspinnen: Der Zeiger läuft durch den Balken. Gedrückt halten, weit und schnell nach hinten ziehen und loslassen, wenn er in einer Zone steht. Tastatur: Leertaste halten zum Spannen, loslassen; Pfeiltasten geben die Richtung."
     @pointerdown.prevent="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerCancel"
     @contextmenu.prevent
   >
+    <svg v-if="cord" class="cord" aria-hidden="true">
+      <circle :cx="cord.x0" :cy="cord.y0" r="6" />
+      <line :x1="cord.x0" :y1="cord.y0" :x2="cord.x" :y2="cord.y" :class="{ taut: cord.taut }" />
+      <circle :cx="cord.x" :cy="cord.y" r="9" class="handle" :class="{ taut: cord.taut }" />
+    </svg>
+    <p v-if="!finished && t >= 0 && !holding" class="howto">
+      Halten · weit und schnell ziehen · in der Zone loslassen
+    </p>
     <p v-if="banner" :key="banner" class="banner" :class="{ calm }" aria-live="assertive">
       {{ banner }}
     </p>
 
     <div class="gauge">
-      <div class="pips" aria-hidden="true">
-        <i
-          v-for="n in challenge.maxTaps"
-          :key="n"
-          :class="taps[n - 1] ? taps[n - 1]!.kind : 'open'"
-        />
+      <div class="meters" aria-hidden="true">
+        <span class="meter">
+          <span class="label">Zug</span>
+          <span class="track"><span :style="{ transform: `scaleX(${tension})` }" /></span>
+        </span>
+        <span class="meter">
+          <span class="label">Ruck</span>
+          <span class="track">
+            <span :style="{ transform: `scaleX(${keyStart !== null ? 0.6 : liveSpeed})` }" />
+          </span>
+        </span>
+        <span class="meter power mono" :class="{ full: livePull >= 0.97 }">
+          {{ holding ? `${Math.round(livePull * 100)} %` : '' }}
+        </span>
       </div>
 
       <div ref="barEl" class="bar" aria-hidden="true">
-        <span
-          v-for="(z, i) in zonesGeo"
-          :key="i"
-          ref="zoneEls"
-          class="zone"
-          :class="{ hit: (best[i] ?? 0) > 0, core: (best[i] ?? 0) >= 1 }"
-          :style="z.zone"
-        >
+        <span v-for="(z, i) in zonesGeo" :key="i" ref="zoneEls" class="zone" :style="z.zone">
           <span class="core" :style="z.core" />
         </span>
         <span
-          v-for="(tp, i) in taps"
-          :key="`mark-${i}`"
+          v-if="released"
           class="mark"
-          :class="tp.kind"
-          :style="{ left: pct(tp.p) }"
+          :class="released.kind"
+          :style="{ left: pct(released.p) }"
         />
         <span v-if="!finished" class="needle" :style="{ left: pct(needle) }" />
       </div>
@@ -282,7 +435,7 @@ onUnmounted(() => {
         v-for="pop in popups"
         :key="pop.id"
         class="popup mono"
-        :class="[pop.kind, { still: !animated }]"
+        :class="[pop.kind === 'short' ? 'repeat' : pop.kind, { still: !animated }]"
         :style="{ left: pct(pop.p) }"
         aria-hidden="true"
       >
@@ -304,6 +457,59 @@ onUnmounted(() => {
   user-select: none;
   -webkit-user-select: none;
   outline: none;
+}
+
+.cord {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.cord circle {
+  fill: var(--text-muted);
+}
+
+.cord line {
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.cord line.taut {
+  stroke: var(--text);
+  stroke-dasharray: none;
+}
+
+.cord .handle {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+}
+
+.cord .handle.taut {
+  stroke: var(--text);
+  fill: rgba(237, 237, 239, 0.25);
+}
+
+.launchpad.holding {
+  cursor: grabbing;
+}
+
+.howto {
+  position: absolute;
+  bottom: calc(18% + 48px);
+  left: 50%;
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .banner {
@@ -348,43 +554,49 @@ onUnmounted(() => {
   background: var(--bg);
 }
 
-/* Taps: offen, Treffer, Kern, wiederholt, daneben */
-.pips {
+/* Zug und Ruck: live, solange man zieht */
+.meters {
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
   display: flex;
-  gap: 5px;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.pips i {
-  width: 9px;
-  height: 9px;
-  border: 1px solid var(--text-muted);
-  transition:
-    background 0.12s,
-    border-color 0.12s;
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.pips i.hit {
-  border-color: var(--text);
-  background: rgba(237, 237, 239, 0.55);
+.meter .track {
+  position: relative;
+  width: 70px;
+  height: 5px;
+  background: var(--line);
+  overflow: hidden;
 }
 
-.pips i.core {
-  border-color: var(--text);
+.meter .track span {
+  position: absolute;
+  inset: 0;
   background: var(--text);
-  box-shadow: 0 0 8px rgba(237, 237, 239, 0.8);
+  transform-origin: left;
 }
 
-.pips i.repeat {
-  border-color: var(--text-faint);
-  background: var(--line-strong);
+.meter.power {
+  min-width: 3.5em;
+  color: var(--text);
+  font-size: 0.8rem;
 }
 
-.pips i.miss {
-  border-color: #e5484d;
-  background: rgba(229, 72, 77, 0.35);
+.meter.power.full {
+  text-shadow: 0 0 8px rgba(237, 237, 239, 0.9);
 }
 
 .mark {
@@ -477,19 +689,6 @@ onUnmounted(() => {
   transform-origin: center;
 }
 
-/* getroffene Zone bleibt klar hervorgehoben */
-.zone.hit {
-  background: rgba(237, 237, 239, 0.42);
-  box-shadow:
-    0 0 0 1px var(--text),
-    0 0 12px rgba(237, 237, 239, 0.35);
-}
-
-.zone.core .core {
-  background: var(--text);
-  box-shadow: 0 0 10px rgba(237, 237, 239, 0.9);
-}
-
 .needle {
   position: absolute;
   top: -5px;
@@ -503,10 +702,6 @@ onUnmounted(() => {
   .banner,
   .popup {
     animation: none;
-  }
-
-  .pips i {
-    transition: none;
   }
 }
 </style>

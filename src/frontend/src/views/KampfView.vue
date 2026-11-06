@@ -7,13 +7,16 @@ import {
   fetchBattle,
   fetchBeyblades,
   fetchMatch,
+  finishMatch,
   submitLaunch,
+  triggerUlt,
   type BattleReport,
   type BeybladeDto,
   type FighterDto,
   type LaunchInput,
   type MatchDto,
   type Side,
+  type UltType,
 } from '@/api'
 import { auth } from '@/auth'
 import { refreshMe } from '@/stores/me'
@@ -24,14 +27,27 @@ import { createChoreography, type Choreography } from '@/game/choreographer'
 import { SIGNAL } from '@/game/launch'
 import { createStandbyChoreography, type StandbyChoreography } from '@/game/standby'
 import {
+  activeUlt,
   displayEnergy,
   fighterOf,
+  hitGhost,
   formatClock,
   isDeflected,
   matchupLabel,
   mySideOf,
   other,
+  ultAt,
+  ultWindows,
 } from '@/game/playback'
+import { ULT_COLOR } from '@/game/ult'
+import {
+  playCountdown,
+  playUltCutIn,
+  playUltReady,
+  prepareSounds,
+  setSoundMuted,
+  soundMuted,
+} from '@/game/sound'
 import { useBattlePlayback } from '@/composables/useBattlePlayback'
 import { useModelUrls } from '@/composables/useModelUrls'
 import BattleResultDialog from '@/components/BattleResultDialog.vue'
@@ -39,6 +55,8 @@ import BeybladeSpinner from '@/components/BeybladeSpinner.vue'
 import StatBar from '@/components/StatBar.vue'
 import BattleLog from '@/components/battle/BattleLog.vue'
 import FighterPanel from '@/components/battle/FighterPanel.vue'
+import UltBadge from '@/components/battle/UltBadge.vue'
+import UltCutIn from '@/components/battle/UltCutIn.vue'
 import ArenaPicker from '@/components/battle/ArenaPicker.vue'
 import LaunchPad from '@/components/battle/LaunchPad.vue'
 
@@ -171,6 +189,8 @@ const names = computed<Record<Side, string>>(() => ({
   B: report.value?.fighters?.[1].beyblade ?? 'B',
 }))
 const animate = computed(() => webgl && !!choreo.value && (!reducedMotion || calm.value))
+// In 3D stehen Treffer an der Trefferstelle, oben dann nur noch große Momente (Ult, Finish)
+watch(animate, (on) => playback.setQuietHits(on), { immediate: true })
 const inBattle = computed(() =>
   ['intro', 'launch', 'resolving', 'countdown', 'fight', 'result'].includes(phase.value),
 )
@@ -184,6 +204,28 @@ function energy(side: Side) {
   // Vor dem Kampf (Match ohne Timeline) volle Energie zeigen
   if (!report.value?.timeline) return 1
   return displayEnergy(report.value, side, Math.max(0, time.value))
+}
+
+/** roter Rest in der Spin-Leiste nach Treffern, nur bis zum Finish */
+function ghost(side: Side) {
+  const tl = report.value?.timeline
+  if (!tl || time.value < 0 || time.value > (report.value?.durationMs ?? Infinity)) return null
+  return hitGhost(tl, side, time.value)
+}
+
+const ultTimeline = computed(() => ultWindows(report.value?.timeline?.events ?? []))
+
+/** Ult-Leiste fürs HUD, null ohne Ults (Altbestand) oder vor dem Kampf */
+function ultMeter(side: Side) {
+  const tl = report.value?.timeline
+  if (!tl) return null
+  const finishMs = report.value?.durationMs ?? Infinity
+  return ultAt(tl, side, Math.min(Math.max(0, time.value), finishMs))
+}
+
+function ultRunning(side: Side) {
+  if (time.value > (report.value?.durationMs ?? Infinity)) return null
+  return activeUlt(ultTimeline.value, side, time.value)?.ult ?? null
 }
 
 function hitsUntil(side: Side) {
@@ -267,6 +309,132 @@ function fail(e: unknown) {
   error.value = e instanceof Error ? e.message : String(e)
   phase.value = 'error'
 }
+
+// ---------------------------------------------------------------- Ult selbst auslösen
+
+/** Laufendes Match, in dem der Spieler seine Ult noch auslösen kann; null bei Replays */
+const liveMatchId = ref<string | null>(null)
+/** Druck läuft (Anfrage beim Server) */
+const pressing = ref(false)
+/** Kampfzeit des letzten eigenen Drucks: Das ULT-Ereignis dazu hat seine Einblendung schon bekommen */
+let pressedAt = -Infinity
+
+interface CutIn {
+  id: number
+  fighter: FighterDto | undefined
+  ult: UltType
+  mine: boolean
+  power: number | null
+  durationMs: number
+}
+const cutIn = ref<CutIn | null>(null)
+let cutInId = 0
+let cutInDone: (() => void) | null = null
+
+const canUlt = computed(
+  () =>
+    !!liveMatchId.value &&
+    phase.value === 'fight' &&
+    !pressing.value &&
+    !cutIn.value &&
+    (ultMeter(mySide.value) ?? 0) >= 1 &&
+    !ultRunning(mySide.value) &&
+    time.value < (report.value?.durationMs ?? 0),
+)
+
+/** Einblendung zeigen, Kampf anhalten; `onDone` läuft, wenn sie vorbei ist. */
+function showCutIn(c: Omit<CutIn, 'id' | 'durationMs'>, onDone?: () => void) {
+  const quiet = calm.value || reducedMotion
+  cutIn.value = {
+    ...c,
+    id: ++cutInId,
+    durationMs: c.mine ? (quiet ? 900 : 1500) : quiet ? 700 : 1150,
+  }
+  cutInDone = onDone ?? null
+  playback.hold()
+  playUltCutIn(c.ult, c.mine)
+}
+
+function onCutInDone() {
+  const done = cutInDone
+  cutIn.value = null
+  cutInDone = null
+  if (done) done()
+  else playback.resume()
+}
+
+/** Ult auslösen: Uhr anhalten, Einblendung zeigen, Server rechnet ab diesem Moment neu. */
+async function activateUlt() {
+  const id = liveMatchId.value
+  if (!canUlt.value || !id) return
+  const ult = me.value?.ult?.type
+  if (!ult) return
+  const t = playback.clock.t
+  const token = run
+  pressing.value = true
+  let response: BattleReport | null = null
+  let failed = false
+  let shown = false
+  const finish = () => {
+    if (!shown || (!response && !failed)) return
+    pressing.value = false
+    if (response) applyNewTimeline(response)
+    playback.resume()
+  }
+  showCutIn({ fighter: me.value, ult, mine: true, power: null }, () => {
+    shown = true
+    finish()
+  })
+  try {
+    const m = await triggerUlt(id, t)
+    if (token !== run) return
+    response = m.report ?? null
+    if (!response) failed = true
+    pressedAt = t
+    const fired = response?.timeline?.events.find(
+      (e) => e.type === 'ULT' && e.side === mySide.value && e.t >= t,
+    )
+    if (fired?.type === 'ULT' && cutIn.value)
+      cutIn.value = { ...cutIn.value, power: fired.intensity }
+  } catch {
+    failed = true
+  }
+  finish()
+}
+
+/** Neuer Kampfverlauf nach dem Druck: Bis jetzt identisch, ab jetzt mit Ult. */
+function applyNewTimeline(r: BattleReport) {
+  report.value = r
+  choreo.value = r.timeline ? markRaw(createChoreography(r)) : null
+  playback.replace(r, choreo.value)
+}
+
+playback.onEvent((e) => {
+  if (e.type === 'ULT_READY') {
+    if (e.side === mySide.value && liveMatchId.value) playUltReady()
+    return true
+  }
+  if (e.type !== 'ULT') return false
+  // Eigene, selbst ausgelöste Ult: Einblendung lief schon beim Druck
+  if (e.side === mySide.value && e.t >= pressedAt && e.t < pressedAt + 100) return true
+  const fighter = report.value ? fighterOf(report.value, e.side) : undefined
+  showCutIn({ fighter, ult: e.ult, mine: e.side === mySide.value, power: e.intensity })
+  return true
+})
+
+function onUltKey(e: KeyboardEvent) {
+  if (e.repeat || !canUlt.value) return
+  const target = e.target as HTMLElement | null
+  if (target?.closest('input, textarea, select, [contenteditable]')) return
+  if (e.code === 'Space' || e.key === ' ' || e.key === 'q' || e.key === 'Q') {
+    e.preventDefault()
+    void activateUlt()
+  }
+}
+window.addEventListener('keydown', onUltKey)
+// Metallklänge im Leerlauf vorrechnen, solange man noch Kreisel und Arena wählt
+prepareSounds()
+onUnmounted(() => window.removeEventListener('keydown', onUltKey))
 
 function prepare(r: BattleReport) {
   report.value = r
@@ -376,6 +544,9 @@ async function onLaunch(input: LaunchInput) {
   try {
     const [done] = await Promise.all([awaitReport(m.id, input, token), wait(VERDICT_MS)])
     if (token !== run || !done) return
+    // Der Kampf ist erst vorläufig: Bis zum Ende kann der Spieler seine Ult auslösen
+    liveMatchId.value = done.id ? null : m.id
+    pressedAt = -Infinity
     match.value = null
     standby = null
     prepare(done)
@@ -412,6 +583,7 @@ async function runCountdown() {
   const steps = calm.value || reducedMotion ? [SIGNAL] : ['3', '2', '1', SIGNAL]
   for (const step of steps) {
     countdown.value = step
+    playCountdown(step === SIGNAL)
     await wait(step === SIGNAL ? 450 : 650)
     if (token !== run) return
   }
@@ -421,6 +593,30 @@ async function runCountdown() {
 }
 
 function onFightEnd() {
+  cutIn.value = null
+  cutInDone = null
+  pressing.value = false
+  const id = liveMatchId.value
+  liveMatchId.value = null
+  if (!id) {
+    showResult()
+    return
+  }
+  // Jetzt erst werten lassen: Ergebnis mit Liga-Punkten kommt vom Server
+  const token = run
+  phase.value = 'result'
+  finishMatch(id)
+    .then((m) => {
+      if (token !== run) return
+      if (m.report) report.value = m.report
+      showResult()
+    })
+    .catch((e) => {
+      if (token === run) fail(e)
+    })
+}
+
+function showResult() {
   // Erst jetzt neu laden, damit Header und Dialog das Ergebnis nicht vorher verraten
   void refreshMe()
   phase.value = 'result'
@@ -485,6 +681,7 @@ const dialogNote = computed(() =>
         :choreo="choreo"
         :clock="playback.clock"
         :calm="calm || reducedMotion"
+        :me="mySide"
       />
       <BattleLog v-else-if="report && inBattle" :report="report" :time="time" :names="names" />
       <!-- Vorschau der gewählten Arena mit dem eigenen Kreisel im Launcher -->
@@ -514,11 +711,50 @@ const dialogNote = computed(() =>
       />
 
       <div class="stage-overlay">
+        <UltBadge
+          v-if="(phase === 'fight' || phase === 'result') && ultMeter(mySide) !== null"
+          class="ult-badge-pos"
+          :fighter="me"
+          :value="ultMeter(mySide) ?? 0"
+          :active="ultRunning(mySide)"
+          :interactive="!!liveMatchId && phase === 'fight' && !pressing && !cutIn"
+          :calm="calm || reducedMotion"
+          @activate="activateUlt"
+        />
+        <UltCutIn
+          v-if="cutIn"
+          :key="cutIn.id"
+          :fighter="cutIn.fighter"
+          :ult="cutIn.ult"
+          :mine="cutIn.mine"
+          :power="cutIn.power"
+          :duration-ms="cutIn.durationMs"
+          :calm="calm || reducedMotion"
+          @done="onCutInDone"
+        />
+        <button
+          v-if="inBattle"
+          type="button"
+          class="sound-toggle mono"
+          :aria-pressed="!soundMuted"
+          :aria-label="soundMuted ? 'Ton einschalten' : 'Ton ausschalten'"
+          :title="soundMuted ? 'Ton einschalten' : 'Ton ausschalten'"
+          @click="setSoundMuted(!soundMuted)"
+        >
+          {{ soundMuted ? 'Ton aus' : 'Ton an' }}
+        </button>
         <p v-if="phase === 'fight' || phase === 'result'" class="clock mono" aria-live="off">
           {{ formatClock(time) }}
         </p>
         <TransitionGroup tag="ul" name="pop" class="callouts" aria-live="polite">
-          <li v-for="c in callouts" :key="c.id" :class="c.tone">{{ c.text }}</li>
+          <li
+            v-for="c in callouts"
+            :key="c.id"
+            :class="[c.tone, { ult: !!c.ult }]"
+            :style="c.ult ? { '--ult': ULT_COLOR[c.ult] } : undefined"
+          >
+            {{ c.text }}
+          </li>
         </TransitionGroup>
         <p v-if="countdown" :key="countdown" class="countdown" aria-live="assertive">
           {{ countdown }}
@@ -588,6 +824,7 @@ const dialogNote = computed(() =>
         :energy="energy(mySide)"
         :hits="hitsUntil(mySide)"
         :winner="winnerFlag(mySide)"
+        :ghost="ghost(mySide)"
       />
 
       <!-- Gegner -->
@@ -601,6 +838,9 @@ const dialogNote = computed(() =>
         :hits="hitsUntil(other(mySide))"
         :winner="winnerFlag(other(mySide))"
         :rolling="rolling"
+        :ghost="ghost(other(mySide))"
+        :ult="ultMeter(other(mySide))"
+        :ult-active="ultRunning(other(mySide))"
       />
       <ArenaPicker
         v-else
@@ -771,6 +1011,47 @@ const dialogNote = computed(() =>
   pointer-events: none;
 }
 
+.sound-toggle {
+  position: absolute;
+  top: 24px;
+  left: calc(50% + 48px);
+  z-index: 3;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.sound-toggle:hover,
+.sound-toggle:focus-visible {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.sound-toggle[aria-pressed='false'] {
+  text-decoration: line-through;
+}
+
+.ult-badge-pos {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  z-index: 3;
+}
+
+@media (max-width: 640px) {
+  .ult-badge-pos {
+    bottom: 96px;
+    left: 12px;
+    transform: scale(0.8);
+    transform-origin: bottom left;
+  }
+}
+
 .clock {
   position: absolute;
   top: 24px;
@@ -816,6 +1097,22 @@ const dialogNote = computed(() =>
 
 .callouts li.bad {
   color: var(--text-muted);
+}
+
+/* Ult: groß, in der Farbe der Ult, egal ob eigene oder gegnerische */
+.callouts li.ult {
+  padding: 8px 20px;
+  border-color: var(--ult);
+  background: color-mix(in srgb, var(--ult) 22%, var(--bg));
+  color: var(--text);
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--ult) 55%, transparent);
+}
+
+.callouts li.ult.good {
+  background: var(--ult);
+  color: #0b0b0d;
 }
 
 .pop-enter-active {

@@ -4,6 +4,11 @@ package org.example.game;
 public enum MatchStatus {
     /** Mindestens eine Seite hat noch nicht angespinnt. */
     LAUNCH,
-    /** Beide Starts sind da (oder die Zeit ist abgelaufen), der Kampf ist gespeichert. */
+    /**
+     * Beide Starts sind da, der Kampf läuft: Der Spieler kann seine Ult auslösen, der Kampf ist nur vorläufig
+     * simuliert und noch nicht gespeichert.
+     */
+    FIGHT,
+    /** Kampf beendet und gespeichert. */
     DONE
 }

@@ -17,12 +17,17 @@ public final class BattleTuning {
     private BattleTuning() {}
 
     /** Version der Simulation. Bei jeder Änderung an Formeln oder Konstanten erhöhen. */
-    public static final int SIM_VERSION = 2;
+    public static final int SIM_VERSION = 6;
     /**
-     * Versionen, deren Kämpfe die aktuelle Simulation exakt nachspielt. Version 2 hat nur das Anspinnen
-     * ergänzt: Ohne Launch-Werte rechnet sie Schritt für Schritt wie Version 1.
+     * Versionen, deren Kämpfe die aktuelle Simulation exakt nachspielt. Version 6 hat die Grundwerte neu
+     * eingestellt (weniger Reibung, mehr Clashes, stärkere Ults), ältere Kämpfe behalten ihr Ergebnis, aber
+     * keine Animation mehr.
      */
-    public static final Set<Integer> REPLAYABLE_VERSIONS = Set.of(1, 2);
+    public static final Set<Integer> REPLAYABLE_VERSIONS = Set.of(6);
+    /** Ab dieser Version gibt es Ults. */
+    public static final int ULTS_SINCE = 3;
+    /** Ab dieser Version gilt {@link #TORNADO_FRICTION}. */
+    public static final int TORNADO_FRICTION_SINCE = 4;
 
     // ---------------------------------------------------------------- Zeit
 
@@ -82,24 +87,29 @@ public final class BattleTuning {
      * Mit Anspinnen: Startenergie LAUNCH_SKILL_MIN + LAUNCH_SKILL_RANGE · Qualität + Zufallsanteil. Der Mittelwert
      * typischer Starts liegt nahe am gewürfelten Mittel ohne Anspinnen, damit das Archetyp-Balancing hält.
      */
-    public static final double LAUNCH_SKILL_MIN = 0.835;
-    public static final double LAUNCH_SKILL_RANGE = 0.045;
+    public static final double LAUNCH_SKILL_MIN = 0.843;
+    public static final double LAUNCH_SKILL_RANGE = 0.025;
     /** Kleiner Zufallsanteil der Startenergie beim Anspinnen. */
     public static final double LAUNCH_NOISE = 0.12;
     /** Initiative: Angriffsgewicht ±INITIATIVE · Differenz der Launch-Qualitäten … */
-    public static final double INITIATIVE = 0.25;
+    public static final double INITIATIVE = 0.16;
     /** … bis zu diesem Zeitpunkt. */
     public static final int INITIATIVE_MS = 8_000;
     /** Zufällige Abweichung der Reibung pro Kampf (Spitze, Untergrund), ±. */
     public static final double FRICTION_JITTER = 0.10;
     /** Grundreibung pro Sekunde (Anteil der Energie). */
-    public static final double FRICTION_BASE = 1 / 46.0;
+    public static final double FRICTION_BASE = 1 / 54.0;
     /** Schwere Kreisel reiben mehr. */
     public static final double FRICTION_WEIGHT = 0.02;
     /** Defensive Spin Tracks reiben mehr (breite Auflage). */
-    public static final double FRICTION_DEFENSE = 0.03;
+    public static final double FRICTION_DEFENSE = 0.012;
+    /**
+     * Anteil der Reibung bis ENGAGE_MS: Frisch angespinnte Kreisel kreisen ruhig auf der Ridge, der Spin hält
+     * am Anfang länger. Danach volle Reibung, damit Ausdauer ihren Vorteil behält.
+     */
+    public static final double TORNADO_FRICTION = 0.7;
     /** Ausdauer senkt die Reibung. */
-    public static final double FRICTION_STAMINA = 0.11;
+    public static final double FRICTION_STAMINA = 0.1;
     /** Unter dieser Energie taumelt der Kreisel und verliert schneller Spin. */
     public static final double WOBBLE_ENERGY = 0.30;
     /** Zusätzliche Reibung beim Taumeln (bei Energie 0 voll). */
@@ -110,7 +120,7 @@ public final class BattleTuning {
     // ---------------------------------------------------------------- Kollisionen
 
     /** Grundrate der Clashes pro Sekunde in der Angriffsphase. */
-    public static final double CLASH_RATE = 0.75;
+    public static final double CLASH_RATE = 1.05;
     /** Sockel der Clash-Rate, auch ohne Dash treffen sich die Kreisel. */
     public static final double CLASH_RATE_BASE = 0.35;
     /** Anteil der Clash-Rate in der Tornado-Phase. */
@@ -125,7 +135,7 @@ public final class BattleTuning {
     /** Schwere Kreisel treffen härter (Impuls). */
     public static final double INTENSITY_WEIGHT = 0.5;
     /** Ausdauer-Kreisel weichen aus, Treffer streifen sie eher: · (1 − EVASION · Ausdauer-Anteil). */
-    public static final double EVASION = 0.58;
+    public static final double EVASION = 0.88;
     /** In der Tornado-Phase sind Kontakte schwächer. */
     public static final double TORNADO_INTENSITY = 0.5;
 
@@ -142,7 +152,7 @@ public final class BattleTuning {
     /** Anteil von HIT, den der Verteidiger bei einer Abwehr trotzdem verliert. */
     public static final double DEFLECT_DEFENDER_LOSS = 0.15;
     /** Spinverlust des Getroffenen bei einem Volltreffer. */
-    public static final double HIT = 0.05;
+    public static final double HIT = 0.09;
     /** Verteidigung dämpft Volltreffer. */
     public static final double ABSORB = 0.45;
     /** Anteil von HIT, den der Angreifer bei einem Volltreffer selbst verliert. */
@@ -151,14 +161,14 @@ public final class BattleTuning {
     // ---------------------------------------------------------------- KOs
 
     /** Burst-Chance pro Volltreffer = BASE · I² · (1 − RESIST · BR) · (1 + FRAGILITY · Ausdauer-Anteil) · Low-Energy. */
-    public static final double BURST_BASE = 0.12;
+    public static final double BURST_BASE = 0.14;
     public static final double BURST_RESIST = 0.7;
     /** Ausdauer-Kreisel sind locker gebaut und bursten leichter. */
-    public static final double FRAGILITY = 1.0;
+    public static final double FRAGILITY = 0.45;
     /** KO-Chancen steigen bei wenig Energie: · (1 + LOW_ENERGY_KO · (1 − E)). */
     public static final double LOW_ENERGY_KO = 2.0;
     /** Ring-Out-Chance pro Volltreffer = BASE · I² · (WEIGHT − Gewicht) · (1 − DEFENSE · Verteidigung) · Low-Energy. */
-    public static final double RING_OUT_BASE = 0.08;
+    public static final double RING_OUT_BASE = 0.1;
     public static final double RING_OUT_WEIGHT = 1.4;
     public static final double RING_OUT_DEFENSE = 0.5;
     /** Chance, dass sich ein abgewehrter Angreifer selbst rausschießt (wie RING_OUT, mit Gewichtsverhältnis). */
@@ -166,6 +176,68 @@ public final class BattleTuning {
     /** Knapp-daneben-Ereignis, wenn der Zufallswert unter NEAR · Ring-Out-Chance liegt. */
     public static final double NEAR_RING_OUT = 2.5;
     public static final int NEAR_COOLDOWN_MS = 2_500;
+
+    // ---------------------------------------------------------------- Ult
+
+    /** Ult-Leiste 0–1, voll = Ult löst aus (frühestens ab ENGAGE_MS). Laden pro Sekunde … */
+    public static final double ULT_TIME = 0.025;
+    /** … pro Volltreffer, den man landet … */
+    public static final double ULT_HIT = 0.12;
+    /** … pro Volltreffer, den man einsteckt … */
+    public static final double ULT_TAKEN = 0.08;
+    /** … pro abgewehrtem Angriff … */
+    public static final double ULT_DEFLECT = 0.07;
+    /** … und pro eigenem Angriff, der abprallt. */
+    public static final double ULT_DEFLECTED = 0.05;
+    /**
+     * Nach dem Vernichtungsschlag lädt die Leiste so lange nicht. Schild, Ansturm und Zweiter Wind laden während
+     * ihrer Wirkung ohnehin nicht; so haben alle Ults denselben Rhythmus.
+     */
+    public static final int SMASH_COOLDOWN_MS = 4_500;
+    /** Gutes Anspinnen lädt die Leiste vor: ULT_LAUNCH_START · Qualität. */
+    public static final double ULT_LAUNCH_START = 0.15;
+    /** Stärke der Ult: POWER_BASE + POWER_LAUNCH · Qualität (+ PERFECT bei perfektem Start), ohne Anspinnen 1. */
+    public static final double ULT_POWER_BASE = 0.85;
+    public static final double ULT_POWER_LAUNCH = 0.15;
+    public static final double ULT_POWER_PERFECT = 0.05;
+
+    /** Vernichtungsschlag: Ausholen bis zum Treffer. */
+    public static final int SMASH_WINDUP_MS = 500;
+    /** Intensität · (1 + BOOST · Stärke), mindestens MIN · Stärke. */
+    public static final double SMASH_BOOST = 0.95;
+    public static final double SMASH_MIN_INTENSITY = 0.3;
+    /** Zusätzlicher Spinschaden des Schlags. */
+    public static final double SMASH_DAMAGE = 2.0;
+    /** Trifft der Schlag auf einen Schild, bricht er ihn, mit diesem Anteil der Wucht. */
+    public static final double SMASH_VS_SHIELD = 1.0;
+
+    /** Schildwall: Dauer · Stärke. */
+    public static final int SHIELD_MS = 4_500;
+    /** Rückstoß für den Angreifer am Schild, Vielfaches von RECOIL. */
+    /** Abwehrchance am Schild: + DEFLECT, höchstens MAX. */
+    public static final double SHIELD_DEFLECT = 0.42;
+    public static final double SHIELD_DEFLECT_MAX = 0.95;
+    public static final double SHIELD_RECOIL = 1.0;
+    /** Der Schild verankert den Kreisel: Reibung · FRICTION (hilft auch gegen Gegner, die kaum angreifen). */
+    public static final double SHIELD_FRICTION = 0.44;
+
+    /** Ansturm: Dauer · Stärke. */
+    public static final int RUSH_MS = 4_500;
+    /** Clash-Rate und Angriffsgewicht während des Ansturms. */
+    public static final double RUSH_RATE = 3.0;
+    public static final double RUSH_WEIGHT = 4.0;
+    /** Kürzerer Mindestabstand der Clashes im Ansturm. */
+    public static final int RUSH_COOLDOWN_MS = 500;
+    /** Intensität · (1 + BOOST · Stärke). */
+    public static final double RUSH_BOOST = 0.3;
+    /** Der Ansturm kostet eigenen Spin: Reibung · FRICTION. */
+    public static final double RUSH_FRICTION = 1.5;
+
+    /** Zweiter Wind: Spin zurück (· Stärke) … */
+    public static final double SURGE_ENERGY = 0.073;
+    /** … und so lange (· Stärke) nur dieser Anteil der Reibung. */
+    public static final int SURGE_MS = 4_000;
+    public static final double SURGE_FRICTION = 0.8;
 
     // ---------------------------------------------------------------- Optik (ohne Einfluss aufs Ergebnis)
 

@@ -139,7 +139,7 @@ export function modelKey(modelPath: string | null | undefined) {
 }
 
 /** Ersatz-Design aus den Werten, falls ein Teil (noch) kein eigenes Design hat. */
-function wheelByStats(attack: number, defense: number): WheelDesign {
+export function wheelByStats(attack: number, defense: number): WheelDesign {
   if (attack >= 6) return WHEEL_DESIGNS.drachenzahn!
   if (attack >= 4) return WHEEL_DESIGNS.phantom!
   if (defense >= 5) return WHEEL_DESIGNS.bollwerk!

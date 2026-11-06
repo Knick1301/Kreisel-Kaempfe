@@ -2,6 +2,7 @@ package org.example.game;
 
 import java.util.Arrays;
 import java.util.List;
+
 import java.util.Random;
 
 import static org.example.game.LaunchRules.*;
@@ -41,34 +42,31 @@ public record LaunchChallenge(int periodMs, double zone0, double zone1, double z
         return 1 - (1 - EDGE_SCORE) * (d - CORE_HALF) / (ZONE_HALF - CORE_HALF);
     }
 
+    /** Timing beim Loslassen zur Zeit {@code tMs}: bester Zonenwert über alle Zonen (0–1). */
+    public double timingAt(int tMs) {
+        double p = needleAt(tMs);
+        double best = 0;
+        for (double z : zones()) best = Math.max(best, zoneScore(Math.abs(p - z)));
+        return best;
+    }
+
     /**
-     * Wertet die Taps aus: Jede Zone zählt mit ihrem besten Tap, höchstens drei Taps. Unplausible Eingaben
-     * (außerhalb des Zeitfensters, nicht aufsteigend, mehr Taps als erlaubt) zählen als verpasster Start.
+     * Wertet das Loslassen aus: Timing mal Zugfaktor. Unplausible Eingaben (außerhalb des Zeitfensters, mehr
+     * als ein Loslassen) und Loslassen neben jeder Zone zählen als verpasster Start.
      */
     public Launch score(LaunchInput input) {
         List<Integer> taps = input == null || input.taps() == null ? List.of() : input.taps();
-        if (taps.isEmpty() || taps.size() > MAX_TAPS) return Launch.MISSED;
-        double[] best = new double[ZONES];
-        int previous = 0;
-        for (Integer t : taps) {
-            if (t == null || t < previous || t > WINDOW_MS) return Launch.MISSED;
-            previous = t;
-            double p = needleAt(t);
-            List<Double> zones = zones();
-            for (int i = 0; i < ZONES; i++) {
-                best[i] = Math.max(best[i], zoneScore(Math.abs(p - zones.get(i))));
-            }
-        }
-        int hits = 0;
-        int cores = 0;
-        double sum = 0;
-        for (double b : best) {
-            if (b > 0) hits++;
-            if (b >= 1) cores++;
-            sum += b;
-        }
-        double quality = round(sum / ZONES);
-        return new Launch(quality, hits, cores, round(-1 + FLY_MIN + FLY_RANGE * quality), 0.0);
+        if (taps.size() != MAX_TAPS) return Launch.MISSED;
+        Integer t = taps.getFirst();
+        if (t == null || t < 0 || t > WINDOW_MS) return Launch.MISSED;
+        double timing = timingAt(t);
+        if (timing <= 0) return Launch.MISSED;
+        double pull = PULL_BASE + PULL_LENGTH * input.pullOrZero() + PULL_SPEED * input.speedOrZero();
+        double quality = round(timing * pull);
+        int hits = 1;
+        int cores = timing >= 1 ? 1 : 0;
+        return new Launch(quality, hits, cores, round(-1 + FLY_MIN + FLY_RANGE * quality),
+                round(AIM_RANGE * input.aimOrStraight()));
     }
 
     private static double round(double v) {

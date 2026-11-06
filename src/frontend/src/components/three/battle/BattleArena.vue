@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { shallowRef } from 'vue'
 import { TresCanvas } from '@tresjs/core'
-import type { BattleReport } from '@/api'
+import type { BattleReport, Side } from '@/api'
+import HitMarks from '@/components/battle/HitMarks.vue'
 import type { Choreography } from '@/game/choreographer'
 import type { BattleClock } from '@/game/clock'
 import BattleScene from './BattleScene.vue'
@@ -12,20 +14,26 @@ defineProps<{
   calm: boolean
   /** nur der eigene Kreisel (Vorschau vor dem Kampf) */
   solo?: boolean
+  /** eigene Seite: färbt die Treffer-Anzeigen (gut/schlecht) */
+  me?: Side | null
 }>()
+
+const marks = shallowRef<InstanceType<typeof HitMarks>>()
 </script>
 
 <template>
   <div class="battle-stage" @contextmenu.prevent>
-    <TresCanvas alpha :clear-alpha="0" :dpr="[1, 2]">
+    <TresCanvas alpha :clear-alpha="0" :dpr="[1, 1.5]">
       <BattleScene
         :report="report"
         :choreo="choreo"
         :clock="clock"
         :calm="calm"
         :solo="solo ?? false"
+        @hit="(c, x, y) => marks?.add(c, x, y)"
       />
     </TresCanvas>
+    <HitMarks v-if="!solo" ref="marks" :report="report" :me="me ?? null" :calm="calm" />
     <p class="controls-hint" aria-hidden="true">
       <span><kbd>Ziehen</kbd> umsehen</span>
       <span><kbd>Rad</kbd> zoomen</span>

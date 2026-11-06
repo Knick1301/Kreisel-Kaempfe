@@ -39,6 +39,11 @@ export class CameraDirector {
     this.initialized = true
   }
 
+  /** Zusätzlicher Ruck, z. B. wenn eine Ult auslöst. */
+  kick(amount: number) {
+    if (!this.calm) this.shakeAmp = Math.max(this.shakeAmp, amount)
+  }
+
   reset() {
     this.nextClash = 0
     this.shakeAmp = 0
@@ -96,7 +101,11 @@ export class CameraDirector {
     while (this.nextClash < c.clashes.length && c.clashes[this.nextClash]!.t <= tMs) {
       const clash = c.clashes[this.nextClash]!
       if (!this.calm && tMs - clash.t < 200) {
-        this.shakeAmp = Math.max(this.shakeAmp, 0.09 * clash.intensity + (clash.final ? 0.12 : 0))
+        const ult = clash.ult === 'SMASH' ? 0.22 : clash.ult === 'RUSH' ? 0.04 : 0
+        this.shakeAmp = Math.max(
+          this.shakeAmp,
+          0.13 * clash.intensity + (clash.final ? 0.14 : 0) + ult,
+        )
       }
       this.nextClash++
     }

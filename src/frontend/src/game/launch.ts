@@ -40,6 +40,8 @@ const round3 = (v: number) => Math.round(v * 1000) / 1000
 /** Flugweite in die Bowl wie auf dem Server (Abschussrahmen). */
 const FLY_MIN = 0.25
 const FLY_RANGE = 0.3
+/** Seitliche Ablenkung bei voller Zugrichtung wie `AIM_RANGE` auf dem Server. */
+const AIM_RANGE = 0.35
 
 export const MISSED: LaunchResult = {
   quality: 0,
@@ -51,49 +53,58 @@ export const MISSED: LaunchResult = {
   missed: true,
 }
 
-/** Vorschau der Wertung, sofort nach dem letzten Tap. Maßgeblich ist der Wert vom Server. */
+/** Zugfaktor wie auf dem Server: PULL_BASE + PULL_LENGTH · Zuglänge + PULL_SPEED · Tempo. */
+export const PULL_BASE = 0.45
+export const PULL_LENGTH = 0.35
+export const PULL_SPEED = 0.2
+/** So viele Pixel Zug ergeben volle Länge, so viele Pixel pro Sekunde volles Tempo. */
+export const PULL_FULL_PX = 220
+export const SPEED_FULL_PX_S = 2200
+
+const clampAim = (v: number | undefined) => (Number.isFinite(v) ? Math.max(-1, Math.min(1, v!)) : 0)
+
+const unit = (v: number | undefined) => (Number.isFinite(v) ? Math.max(0, Math.min(1, v!)) : 0)
+
+export function pullFactor(pull: number, speed: number) {
+  return PULL_BASE + PULL_LENGTH * unit(pull) + PULL_SPEED * unit(speed)
+}
+
+/** Vorschau der Wertung, sofort nach dem Loslassen. Maßgeblich ist der Wert vom Server. */
 export function previewLaunch(c: LaunchChallenge, input: LaunchInput): LaunchResult {
   const taps = input.taps
-  if (taps.length === 0 || taps.length > c.maxTaps) return MISSED
-  const best = c.zones.map(() => 0)
-  let previous = 0
-  for (const t of taps) {
-    if (!Number.isFinite(t) || t < previous || t > c.windowMs) return MISSED
-    previous = t
-    const p = needleAt(c, t)
-    c.zones.forEach((z, i) => {
-      best[i] = Math.max(best[i]!, zoneScore(c, Math.abs(p - z)))
-    })
-  }
-  const hits = best.filter((b) => b > 0).length
-  const cores = best.filter((b) => b >= 1).length
-  const quality = round3(best.reduce((a, b) => a + b, 0) / c.zones.length)
+  if (taps.length !== c.maxTaps) return MISSED
+  const t = taps[0]!
+  if (!Number.isFinite(t) || t < 0 || t > c.windowMs) return MISSED
+  const p = needleAt(c, t)
+  const timing = Math.max(0, ...c.zones.map((z) => zoneScore(c, Math.abs(p - z))))
+  if (timing <= 0) return MISSED
+  const quality = round3(timing * pullFactor(input.pull ?? 0, input.speed ?? 0))
+  const cores = timing >= 1 ? 1 : 0
   return {
     quality,
-    hits,
+    hits: 1,
     cores,
     landingX: round3(-1 + FLY_MIN + FLY_RANGE * quality),
-    landingY: 0,
-    perfect: hits === c.zones.length && quality >= c.perfectQuality,
-    missed: hits === 0,
+    landingY: round3(AIM_RANGE * clampAim(input.aim)),
+    perfect: cores >= 1 && quality >= c.perfectQuality,
+    missed: false,
   }
 }
 
-/** Urteil in Stufen. „Perfekt!“ gibt es nur für alle drei Kerne. */
+/** Urteil in Stufen. „Perfekt!“ gibt es nur im Kern mit vollem, schnellem Zug. */
 export function launchVerdict(l: LaunchResult) {
   if (l.missed) return 'Daneben!'
   if (l.perfect) return 'Perfekt!'
-  if (l.hits === 3) return l.quality >= 0.85 ? 'Hervorragend!' : 'Volltreffer!'
-  if (l.hits === 2) return l.quality >= 0.6 ? 'Stark!' : 'Gut'
-  return l.quality >= 0.3 ? 'Okay' : 'Wackelig'
+  if (l.quality >= 0.85) return 'Hervorragend!'
+  if (l.quality >= 0.7) return 'Stark!'
+  if (l.quality >= 0.5) return 'Gut'
+  return 'Wackelig'
 }
 
-/** Detailzeile, z. B. „2/3 Zonen · 1× Kern · 71 %“. */
+/** Detailzeile, z. B. „Kern · 92 %“. */
 export function launchDetail(l: LaunchResult) {
-  const parts = [`${l.hits}/3 Zonen`]
-  if (l.cores > 0) parts.push(`${l.cores}× Kern`)
-  parts.push(`${Math.round(l.quality * 100)} %`)
-  return parts.join(' · ')
+  if (l.missed) return 'keine Zone · 0 %'
+  return `${l.cores > 0 ? 'Kern' : 'Zone'} · ${Math.round(l.quality * 100)} %`
 }
 
 // ---------------------------------------------------------------- Abschussrahmen → Welt

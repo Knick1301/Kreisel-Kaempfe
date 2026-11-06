@@ -17,7 +17,7 @@ withDefaults(
 
 <template>
   <div class="arena-stage" @contextmenu.prevent>
-    <TresCanvas alpha :clear-alpha="0" :dpr="[1, 2]">
+    <TresCanvas alpha :clear-alpha="0" :dpr="[1, 1.5]">
       <ArenaScene
         :urls="urls"
         :spin-key="spinKey"

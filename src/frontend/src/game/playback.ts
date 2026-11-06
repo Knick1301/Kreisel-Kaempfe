@@ -1,10 +1,12 @@
-import type {
-  BattleReport,
-  BattleTimeline,
-  FighterDto,
-  MatchupDto,
-  Side,
-  TimelineEvent,
+import {
+  ULT_LABEL,
+  type BattleReport,
+  type BattleTimeline,
+  type FighterDto,
+  type MatchupDto,
+  type Side,
+  type TimelineEvent,
+  type UltType,
 } from '@/api'
 
 /** Reine Helfer für Wiedergabe, HUD und Textverlauf (ohne Vue/three). */
@@ -27,6 +29,80 @@ export function energyAt(timeline: BattleTimeline, side: Side, tMs: number) {
   if (i >= samples.length - 1) return samples[samples.length - 1]!
   const frac = f - i
   return samples[i]! * (1 - frac) + samples[i + 1]! * frac
+}
+
+/** So lange steht der rote Rest eines Treffers in der Spin-Leiste, dann läuft er nach. */
+export const HIT_GHOST_HOLD_MS = 350
+export const HIT_GHOST_FADE_MS = 450
+
+/**
+ * Spin vor den letzten Treffern, für den roten Rest in der Spin-Leiste: Treffer sollen sichtbar
+ * Spin kosten, die Reibung nur ruhig. Liefert null, wenn gerade nichts nachläuft.
+ */
+export function hitGhost(timeline: BattleTimeline, side: Side, tMs: number) {
+  const now = energyAt(timeline, side, tMs)
+  let ghost = now
+  const window = HIT_GHOST_HOLD_MS + HIT_GHOST_FADE_MS
+  for (const e of timeline.events) {
+    if (e.t > tMs) break
+    if (e.type !== 'CLASH' || tMs - e.t >= window) continue
+    // Spin kurz vor dem Treffer, danach mindestens bis zum nächsten Sample
+    const before = energyAt(timeline, side, e.t - timeline.sampleMs)
+    const age = tMs - e.t
+    const k = age < HIT_GHOST_HOLD_MS ? 1 : 1 - (age - HIT_GHOST_HOLD_MS) / HIT_GHOST_FADE_MS
+    ghost = Math.max(ghost, now + (before - now) * k)
+  }
+  return ghost - now > 0.004 ? ghost : null
+}
+
+/** Ult-Leiste (0–1) zum Zeitpunkt t, oder null bei Kämpfen ohne Ults. */
+export function ultAt(timeline: BattleTimeline, side: Side, tMs: number) {
+  const samples = timeline.ult?.[side]
+  if (!samples || samples.length === 0) return null
+  const i = Math.max(0, Math.floor(tMs / timeline.sampleMs))
+  // Treppenstufe statt Interpolation: Nach dem Auslösen fällt die Leiste sofort auf 0
+  return samples[Math.min(i, samples.length - 1)]!
+}
+
+/** Ausholen des Vernichtungsschlags bis zum Treffer, wie `SMASH_WINDUP_MS` im Backend. */
+export const SMASH_WINDUP_MS = 500
+
+export interface UltWindow {
+  side: Side
+  ult: UltType
+  /** Auslösen */
+  start: number
+  /** Ende der Wirkung (beim Schlag: der Treffer) */
+  end: number
+  power: number
+}
+
+/** Zeitfenster aller Ults für Aura, Kamera und HUD. */
+export function ultWindows(events: readonly TimelineEvent[]): UltWindow[] {
+  const windows: UltWindow[] = []
+  for (const e of events) {
+    if (e.type === 'ULT') {
+      const end = e.ult === 'SMASH' ? e.t + SMASH_WINDUP_MS : e.t + (e.durationMs ?? 0)
+      windows.push({ side: e.side, ult: e.ult, start: e.t, end, power: e.intensity })
+    } else if (e.type === 'ULT_END') {
+      // vorzeitig beendet, z. B. Schild vom Vernichtungsschlag gebrochen
+      const open = [...windows].reverse().find((w) => w.side === e.side && w.ult === e.ult)
+      if (open && e.t < open.end) open.end = e.t
+    }
+  }
+  return windows
+}
+
+/** Laufende Ult einer Seite zum Zeitpunkt t. */
+export function activeUlt(windows: readonly UltWindow[], side: Side, tMs: number) {
+  return windows.find((w) => w.side === side && tMs >= w.start && tMs < w.end) ?? null
+}
+
+/** Stärke als Wort, abhängig vom Anspinnen. */
+export function ultPowerLabel(power: number) {
+  if (power >= 1.15) return 'Maximal'
+  if (power >= 1.0) return 'Stark'
+  return null
 }
 
 /**
@@ -64,6 +140,8 @@ export type Tone = 'good' | 'bad' | 'neutral'
 export interface Callout {
   text: string
   tone: Tone
+  /** Ult-Einblendung: größer und in der Farbe der Ult */
+  ult?: UltType
 }
 
 /** Ab dieser Intensität heißt ein Treffer „Volltreffer!“. */
@@ -93,6 +171,14 @@ export function calloutFor(
       return { text: 'Ausgedreht!', tone: tone(e.victim !== me) }
     case 'TIMEOUT':
       return { text: 'Zeit!', tone: 'neutral' }
+    case 'ULT': {
+      const power = ultPowerLabel(e.intensity)
+      return {
+        text: `${ULT_LABEL[e.ult]}!${power ? ` · ${power}` : ''}`,
+        tone: tone(e.side === me),
+        ult: e.ult,
+      }
+    }
     default:
       return null
   }
@@ -114,6 +200,7 @@ export function describeEvent(
       return 'Die Kreisel gehen aufeinander los.'
     case 'CLASH': {
       const pct = Math.round(e.intensity * 100)
+      if (e.ult === 'SMASH') return `${names[e.attacker]} schlägt mit voller Wucht zu (${pct} %)!`
       if (isDeflected(events, index)) return `${names[e.attacker]} greift an (${pct} %) …`
       return e.intensity >= BIG_HIT
         ? `Volltreffer von ${names[e.attacker]} (${pct} %)!`
@@ -133,6 +220,12 @@ export function describeEvent(
       return `${names[e.victim]} hat ausgedreht.`
     case 'TIMEOUT':
       return 'Zeit! Die Restenergie entscheidet.'
+    case 'ULT':
+      return `${names[e.side]} entfesselt ${ULT_LABEL[e.ult]}!`
+    case 'ULT_END':
+      return e.ult === 'SHIELD' ? `Der Schildwall von ${names[e.side]} fällt.` : null
+    case 'ULT_READY':
+      return `Die Ult von ${names[e.side]} ist bereit!`
   }
 }
 

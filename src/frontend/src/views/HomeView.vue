@@ -9,6 +9,7 @@ import { hasWebGL } from '@/webgl'
 import { pickActive, setActiveId } from '@/activeBeyblade'
 import BeybladeSpinner from '@/components/BeybladeSpinner.vue'
 import StatBar from '@/components/StatBar.vue'
+import { lp } from '@/game/league'
 
 const ArenaStage = defineAsyncComponent(() => import('@/components/three/ArenaStage.vue'))
 
@@ -202,7 +203,7 @@ const webgl = hasWebGL()
                   <LeagueBadge :tier="rank.tier" :division="rank.division" :size="34" />
                   <strong>{{ rank.league }}</strong>
                 </span>
-                <span class="mono">{{ rank.rating }}<span class="faint"> LP</span></span>
+                <span class="mono">{{ lp(rank.rating) }}<span class="faint"> LP</span></span>
               </div>
               <div class="league-bar"><span :style="{ width: `${rank.progress}%` }" /></div>
               <div class="league-meta">

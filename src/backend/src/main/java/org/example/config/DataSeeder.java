@@ -6,6 +6,7 @@ import org.example.entities.parts.FusionWheel;
 import org.example.entities.parts.Part;
 import org.example.entities.parts.SpinTrack;
 import org.example.entities.parts.Tip;
+import org.example.game.UltType;
 import org.example.repositories.FusionWheelRepository;
 import org.example.repositories.SpinTrackRepository;
 import org.example.repositories.TipRepository;
@@ -25,7 +26,7 @@ import java.util.List;
 public class DataSeeder implements CommandLineRunner {
 
     private record WheelData(String name, String modelPath, int weight,
-                             int attack, int defense, int burstResistance) {}
+                             int attack, int defense, int burstResistance, String ult) {}
     private record TrackData(String name, String modelPath, int weight,
                              int defense, int stamina) {}
     private record TipData(String name, String modelPath, int weight,
@@ -55,6 +56,7 @@ public class DataSeeder implements CommandLineRunner {
             w.setAttack(d.attack());
             w.setDefense(d.defense());
             w.setBurstResistance(d.burstResistance());
+            w.setUlt(UltType.parse(d.ult()));
             w.setActive(true);
             wheels.save(w);
         }
