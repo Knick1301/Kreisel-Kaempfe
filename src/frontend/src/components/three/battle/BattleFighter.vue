@@ -1,32 +1,41 @@
 <script setup lang="ts">
 import { computed, onUnmounted, shallowRef } from 'vue'
 import { Euler, Quaternion, Vector3, type Group, type Material } from 'three'
-import type { FighterDto } from '@/api'
+import type { FighterDto, PartDto } from '@/api'
 import { BEY_SIZE } from '@/game/arenas'
 import type { FighterPose, PartPose } from '@/game/choreographer'
-import { botDesigns, designsFor } from '@/game/partDesigns'
+import { botDesigns, botModelPaths, designsFor } from '@/game/partDesigns'
 import { useModelUrls } from '@/composables/useModelUrls'
 import BeybladeRotor from '../BeybladeRotor.vue'
 import ProceduralRotor from '../ProceduralRotor.vue'
 import { makeMetallic } from '../materials'
 import type { RotorPart } from '../rotorParts'
 
-/** Ein Kämpfer in der Arena: GLB-Modell, wenn alle drei Dateien da sind, sonst das prozedurale Modell. */
+/** Ein Kämpfer in der Arena: GLB-Modell (auch für KI-Gegner), Fallback das prozedurale Modell. */
 const props = defineProps<{ fighter: FighterDto | undefined; seed: number }>()
 
-const urls = useModelUrls(() => props.fighter?.parts ?? [])
+const BOT_STATS = {
+  attack: 4,
+  defense: 6,
+  stamina: 10,
+  dash: 5,
+  weight: 78,
+  burstResistance: 3,
+}
+
+/** Eigene Teile oder, bei KI-Gegnern, echte Teile passend zu ihren Werten */
+const modelParts = computed<PartDto[]>(() => {
+  const f = props.fighter
+  if (f?.parts?.length === 3) return f.parts
+  return botModelPaths(f?.stats ?? BOT_STATS, props.seed).map(
+    (modelPath) => ({ modelPath }) as PartDto,
+  )
+})
+const urls = useModelUrls(() => modelParts.value)
 const designs = computed(() => {
   const f = props.fighter
   if (f?.parts?.length === 3) return designsFor(f.parts)
-  const stats = f?.stats ?? {
-    attack: 4,
-    defense: 6,
-    stamina: 10,
-    dash: 5,
-    weight: 78,
-    burstResistance: 3,
-  }
-  return botDesigns(stats, f?.accent, props.seed)
+  return botDesigns(f?.stats ?? BOT_STATS, f?.accent, props.seed)
 })
 const outer = shallowRef<Group>()
 const inner = shallowRef<Group>()

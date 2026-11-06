@@ -18,6 +18,7 @@ import type { PartDto } from '@/api'
 import { baseBowlY, BEY_SIZE, STANDARD_ARENA } from '@/game/arenas'
 import { designsFor } from '@/game/partDesigns'
 import BeybladeRotor from './BeybladeRotor.vue'
+import GlbPartRotor from './GlbPartRotor.vue'
 import ProceduralRotor from './ProceduralRotor.vue'
 import BowlDecor from './BowlDecor.vue'
 import PlaceholderRotor from './PlaceholderRotor.vue'
@@ -39,7 +40,11 @@ const props = withDefaults(
 )
 
 const designs = computed(() => (props.parts.length === 3 ? designsFor(props.parts) : null))
-const showProcedural = computed(() => !!designs.value && (props.procedural || props.urls === null))
+/** Baukasten: GLB-Teile mit Einrasten/Explosion, solange alle drei Dateien da sind */
+const showGlbParts = computed(() => props.procedural && !!props.urls)
+const showProcedural = computed(
+  () => !!designs.value && !showGlbParts.value && (props.procedural || props.urls === null),
+)
 
 const BG = '#0a0a0b'
 const ACCENT = '#ededef'
@@ -199,8 +204,14 @@ onBeforeRender(({ delta }) => {
   </TresMesh>
 
   <TresGroup ref="spinner">
+    <GlbPartRotor
+      v-if="showGlbParts && props.urls"
+      :urls="props.urls"
+      :exploded="exploded"
+      @ready="spinOnce"
+    />
     <ProceduralRotor
-      v-if="showProcedural && designs"
+      v-else-if="showProcedural && designs"
       :designs="designs"
       animated
       :exploded="exploded"

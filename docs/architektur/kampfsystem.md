@@ -287,34 +287,59 @@ sich die Wahl, damit „Schnelles Match“ direkt dort startet. Lobby-Kämpfe la
 
 ## 3D-Teile
 
-Echte GLB-Modelle gibt es nur für das Hells-Scythe-Set. Alle Teile haben zusätzlich ein **prozedurales
-Design**, das aus Code gebaut wird:
+Alle 21 Teile sind echte GLB-Modelle in `src/frontend/public/models`. Das Hells-Scythe-Set ist von Hand
+modelliert, die übrigen 18 Teile erzeugt ein Blender-Skript:
 
-- `game/partDesigns.ts`: Designs als Daten, über den Modellnamen (`modelPath` ohne Ordner und Endung)
-  zugeordnet. Für unbekannte Teile gibt es einen Ersatz, der aus den Werten abgeleitet wird.
-- `components/three/parts/partBuilders.ts`: Geometrie aus extrudierten Shapes mit Fase und
-  Lathe-Profilen.
-  - **Fusion Wheel:** Metallring mit Kerben, Klingen in sechs Formen (Sichel, Bollwerk, Wirbel, Fang,
-    Mond, Phantom), transluzente Ebene mit Aussparungen, Leuchtkanten, Nabe, Emblem, Schrauben.
-  - **Spin Track:** Ratsche mit schrägen Zähnen und eine von sechs Bauformen (Flansch, freier Ring,
-    Doppelratsche, Turm, Sechskant mit Bolzen, Feder-Spirale).
-  - **Tip:** Gehäuse mit Leuchtband und einer von sechs Kontaktformen (flach, Nadel, Kugel, Kralle,
-    Kugellager, Kuppel).
-- `ProceduralRotor.vue`: setzt die drei Teile zusammen, Spitze unten.
-  - Bei einem Teiletausch wird nur dieses Teil neu gebaut und rastet mit einer Fall-Animation ein.
-  - Die Explosionsansicht lässt die Teile auseinanderschweben.
-  - Burst-Schnittstelle (`parts()`, `scale()`) wie bei den anderen Rotoren.
+```
+blender -b --factory-startup -P tools/blender/build_parts.py -- --out src/frontend/public/models --preview tools/blender/preview.png
+```
 
-Einsatz:
+- Quelle sind die Designs in `game/partDesigns.ts` (Form, Klingenzahl, Farben), die Dateinamen kommen aus
+  `parts/*.json`. Das Skript liest beides direkt, Baukasten-Farben und Modelle bleiben so synchron.
+- Maße wie beim Hells-Scythe-Set (Blender-Einheiten, Z oben, Achse im Ursprung). Die Teile greifen
+  ineinander, jede Kombination stapelt ohne Versatz:
 
-- **Baukasten:** immer das prozedurale Modell, damit Einrasten und Explosionsansicht für jedes Teil
-  funktionieren.
-- **Home und Kampf:** das GLB-Modell, wenn alle drei Dateien existieren, sonst das prozedurale.
-- **KI-Gegner:** Sie haben keine Teile. Ihr Aussehen wird aus den Werten gewählt, in ihrer Akzentfarbe
-  und über den Kampf-Seed stabil.
+| Teil | Radius | Höhe |
+|---|---|---|
+| Tip | ≤ 0,08 | 0–0,30 (Schaft ab 0,14) |
+| Spin Track | ≤ 0,18 | 0,12–0,25 |
+| Fusion Wheel | ≤ 0,25 | 0,21–0,36 (Hörner und Türme bis 0,39) |
 
-Ein neues Teil braucht einen Eintrag in `parts/*.json` und ein Design in `partDesigns.ts`. Seine Werte
-müssen im bisherigen Bereich bleiben, sonst ändern sich die Referenzwerte der Normalisierung
+- Aufbau: `wheels.py`, `tracks.py` und `tips.py` je Kategorie, gemeinsame Helfer in `geometry.py`, Logos in
+  `logos.py`. Grundwerkzeuge sind `grid_solid` (Körper über einem (u, t)-Gitter, Knicke auf Stützstellen
+  ergeben plane Facetten, `zone` legt pro Fläche das Material fest) und `blade` (Klinge entlang einer
+  gebogenen Mittellinie mit Messerquerschnitt: Grat, Fasen, dünne Schneide, Unterseite steigt zur Spitze).
+  Klingenspitzen zeigen in Drehrichtung (in Blender gegen den Uhrzeigersinn).
+- **Fusion Wheels** haben je einen eigenen Aufbau, dazu den Emblem-Chip mit Logo (`LOGOS`):
+  - Bollwerk: Zwölfkant-Sockel, sechs Schildplatten mit Chromrand und Leuchtgrat, Zinnentürme mit Kristall.
+  - Wirbel: zwei Ebenen gedrehter Flügel, unten Chrom, oben farbig mit weißer Schneide.
+  - Drachenzahn: hakenförmige Hornklauen mit Zackenrücken, Bohrung und Leuchtauge, rote Nebenzähne.
+  - Eisenmond: schwerer Ring, zwei aufsteigende Sicheln mit Zähnen außen, Leuchtmonde dazwischen.
+  - Phantom: zerfetzter Leuchtumhang, Sensen, die zur Spitze nach oben laufen, kurze Dornen.
+  - Greif: goldener Federkranz aus vier Flammenbögen mit gezackten Federn, große blaue Klingen mit
+    Chromrücken, leuchtende Ebene mit Wirbelstreifen.
+- **Spin Tracks:** gerändelte Grundplatte, eine Bauform je Stil (Kugellager mit Leuchtrille, Trommel mit
+  Rippen, Stufenturm mit Zinnen, Sechseckfestung mit Spitztürmen, Feder mit Spiralfinnen, Kelch ohne Grundplatte, der nach oben breiter wird) und oben eine
+  facettierte Ratsche mit Nocken (`LOBES`) und Metallstreifen.
+- **Tip:** gestufter Schaft, Flansch, facettierter Zehnkant-Körper mit Metallband und Leuchtring,
+  gerändelter Fußring, Kontaktform je Typ (Speer: gedrehter fünfzackiger Bohrer).
+- Mit `--preview` rendert das Skript Kontaktblätter: `preview.png` (alle Teile und Kombinationen) sowie
+  `-logos` (von oben), `-wheels` (schräg), `-tracks` und `-tips` als Nahaufnahmen. Standard ist Eevee
+  (braucht eine GPU); ohne GPU, etwa bei gesperrtem Bildschirm, mit `--engine CYCLES` auf der CPU rendern.
+
+Einsatz im Frontend:
+
+- **Baukasten:** `GlbPartRotor.vue` lädt die drei Teile einzeln. Ein getauschtes Teil fällt drehend ein,
+  die Explosionsansicht zieht die Teile auseinander.
+- **Home und Kampf:** `BeybladeRotor.vue` mit allen drei Dateien.
+- **KI-Gegner:** `botModelPaths()` wählt echte Teile passend zu ihren Werten, über den Seed stabil.
+- `makeMetallic()` macht nur die Kunststoffteile des Hells-Scythe-Sets metallisch, die Blender-Teile
+  behalten ihre Materialien.
+- Fehlt eine Datei, bleibt das prozedurale Modell aus `partBuilders.ts` als Fallback.
+
+Ein neues Teil braucht einen Eintrag in `parts/*.json` und ein Design in `partDesigns.ts`, danach das
+Skript neu laufen lassen. Für ein neues Fusion Wheel optional ein Logo in `LOGOS`. Die Werte müssen im
+bisherigen Bereich bleiben, sonst ändern sich die Referenzwerte der Normalisierung
 (`TuningCatalogTest` schlägt dann an und `SIM_VERSION` muss steigen).
 
 ## Neue Arena hinzufügen

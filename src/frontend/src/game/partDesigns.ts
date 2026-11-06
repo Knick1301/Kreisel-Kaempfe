@@ -7,9 +7,9 @@ import { mulberry32 } from './prng'
  * `components/three/parts/partBuilders.ts`.
  */
 
-export type WheelShape = 'scythe' | 'fortress' | 'vortex' | 'fang' | 'moon' | 'phantom'
-export type TrackStyle = 'heavy' | 'orbit' | 'core' | 'tower' | 'bastion' | 'spring'
-export type TipStyle = 'flat' | 'needle' | 'ball' | 'claw' | 'bearing' | 'dome'
+export type WheelShape = 'scythe' | 'fortress' | 'vortex' | 'fang' | 'moon' | 'phantom' | 'feather'
+export type TrackStyle = 'heavy' | 'orbit' | 'core' | 'tower' | 'bastion' | 'spring' | 'chalice'
+export type TipStyle = 'flat' | 'needle' | 'ball' | 'claw' | 'bearing' | 'dome' | 'spear'
 
 export interface WheelDesign {
   shape: WheelShape
@@ -100,6 +100,15 @@ export const WHEEL_DESIGNS: Readonly<Record<string, WheelDesign>> = {
     layer: '#3a1d5c',
     accent: '#c084fc',
   },
+  greif: {
+    shape: 'feather',
+    blades: 4,
+    notches: 12,
+    heft: 1.1,
+    metal: '#e6be55',
+    layer: '#0f4fa8',
+    accent: '#38b6ff',
+  },
 }
 
 export const TRACK_DESIGNS: Readonly<Record<string, TrackDesign>> = {
@@ -109,6 +118,7 @@ export const TRACK_DESIGNS: Readonly<Record<string, TrackDesign>> = {
   turm: { style: 'tower', teeth: 6, metal: '#c2c7cf', accent: '#fbbf24' },
   bastion: { style: 'bastion', teeth: 6, metal: '#8f96a1', accent: '#f87171' },
   feder: { style: 'spring', teeth: 5, metal: '#b9bfc8', accent: '#34d399' },
+  kelch: { style: 'chalice', teeth: 4, metal: '#c9cdd4', accent: '#38b6ff' },
 }
 
 export const TIP_DESIGNS: Readonly<Record<string, TipDesign>> = {
@@ -118,6 +128,7 @@ export const TIP_DESIGNS: Readonly<Record<string, TipDesign>> = {
   kralle: { style: 'claw', color: '#e2561f', accent: '#ffb347' },
   lager: { style: 'bearing', color: '#d9dde3', accent: '#c084fc' },
   kuppel: { style: 'dome', color: '#3a3f48', accent: '#34d399' },
+  speer: { style: 'spear', color: '#e6be55', accent: '#38b6ff' },
 }
 
 /** `fusion-wheels/drachenzahn.glb` → `drachenzahn` */
@@ -187,6 +198,29 @@ export function botDesigns(
     },
     tip: { ...tipByStats(Math.round(stats.stamina / 2), stats.dash), accent: color },
   }
+}
+
+function keyOf<T>(record: Readonly<Record<string, T>>, design: T) {
+  return Object.keys(record).find((k) => record[k] === design) ?? ''
+}
+
+/**
+ * Modellpfade für einen KI-Gegner: echte Teile, passend zu seinen Werten, über den Seed stabil.
+ * So sehen KI-Gegner genauso detailliert aus wie gebaute Kreisel.
+ */
+export function botModelPaths(stats: BeybladeStats, seed: number): string[] {
+  const rng = mulberry32(seed >>> 0)
+  const wheelBase = wheelByStats(Math.round(stats.attack), Math.round(stats.defense / 2))
+  const shapes = keys(WHEEL_DESIGNS)
+  const wheel =
+    rng() < 0.35 ? WHEEL_DESIGNS[shapes[Math.floor(rng() * shapes.length)]!]! : wheelBase
+  const track = trackByStats(Math.round(stats.defense / 2), Math.round(stats.stamina / 2))
+  const tip = tipByStats(Math.round(stats.stamina / 2), stats.dash)
+  return [
+    `fusion-wheels/${keyOf(WHEEL_DESIGNS, wheel)}.glb`,
+    `spin-tracks/${keyOf(TRACK_DESIGNS, track)}.glb`,
+    `tips/${keyOf(TIP_DESIGNS, tip)}.glb`,
+  ]
 }
 
 /** Farbe abdunkeln (0 = schwarz, 1 = unverändert). */

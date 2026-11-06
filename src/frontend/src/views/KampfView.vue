@@ -11,6 +11,7 @@ import {
   type Side,
 } from '@/api'
 import { auth } from '@/auth'
+import { refreshMe } from '@/stores/me'
 import { pickActive, setActiveId } from '@/activeBeyblade'
 import { hasWebGL } from '@/webgl'
 import { ARENA_LIST, arenaById } from '@/game/arenas'
@@ -263,6 +264,8 @@ async function runCountdown() {
 }
 
 function onFightEnd() {
+  // Erst jetzt neu laden, damit Header und Dialog das Ergebnis nicht vorher verraten
+  void refreshMe()
   phase.value = 'result'
   showDialog.value = true
 }
@@ -531,6 +534,7 @@ const dialogNote = computed(() =>
       :replay-label="reducedMotion && !calm ? 'Animation ansehen' : 'Replay'"
       :again-label="isReplay ? 'Gegen KI kämpfen' : 'Nochmal kämpfen'"
       :note="dialogNote"
+      :fresh="!isReplay"
       @close="showDialog = false"
       @again="again"
       @replay="reducedMotion && !calm ? watchCalm() : replay()"

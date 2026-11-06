@@ -18,6 +18,12 @@ public interface BattleResultRepository extends JpaRepository<BattleResult, Long
             + "where r.mode is null or r.mode <> org.example.game.BattleMode.BOT group by r.loser.username")
     List<Object[]> countLossesByUser();
 
+    @Query("select r.winner.username, count(r) from BattleResult r group by r.winner.username")
+    List<Object[]> countAllWinsByUser();
+
+    @Query("select r.loser.username, count(r) from BattleResult r group by r.loser.username")
+    List<Object[]> countAllLossesByUser();
+
     @Query("select count(r) from BattleResult r "
             + "where r.mode = org.example.game.BattleMode.BOT and r.winner.username = :username")
     long countBotWins(String username);

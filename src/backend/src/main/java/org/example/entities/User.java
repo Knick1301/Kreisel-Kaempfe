@@ -18,6 +18,11 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    /** Liga-Punkte (Elo). {@code null} = noch nie gewertet gekämpft, zählt als Startwert. */
+    private Integer rating;
+
+    private Integer xp;
+
     @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Beyblade> beybladeConfigurations = new ArrayList<>();
 
@@ -63,4 +68,20 @@ public class User {
         return id;
     }
 
+
+    public Integer getRating() {
+        return rating;
+    }
+
+    public void setRating(Integer rating) {
+        this.rating = rating;
+    }
+
+    public Integer getXp() {
+        return xp;
+    }
+
+    public void setXp(Integer xp) {
+        this.xp = xp;
+    }
 }

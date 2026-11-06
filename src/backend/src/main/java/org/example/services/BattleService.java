@@ -44,14 +44,16 @@ public class BattleService {
     private final UserRepository users;
     private final BeybladeService beyblades;
     private final PartService parts;
+    private final RankingService ranking;
     private final Random random = new Random();
 
     public BattleService(BattleResultRepository results, UserRepository users, BeybladeService beyblades,
-                         PartService parts) {
+                         PartService parts, RankingService ranking) {
         this.results = results;
         this.users = users;
         this.beyblades = beyblades;
         this.parts = parts;
+        this.ranking = ranking;
     }
 
     /** Kampf zwischen zwei Spielern (Schnelles Match gegen echte User, Lobby). */
@@ -106,6 +108,9 @@ public class BattleService {
 
     private BattleResult simulateAndSave(BattleMode mode, Arena arena, User userA, FighterSnapshot a, User userB,
                                          FighterSnapshot b) {
+        // Verwaltete Instanzen holen, damit Liga-Punkte und XP sicher mitgespeichert werden
+        userA = users.findById(userA.getId()).orElseThrow();
+        userB = users.findById(userB.getId()).orElseThrow();
         long seed = random.nextLong() & SEED_MASK;
         BattleOutcome outcome = new Battle(arena, a.fighter(), b.fighter(), seed).run();
 
@@ -124,6 +129,7 @@ public class BattleService {
         result.setArena(arena.id());
         result.setFighterA(a);
         result.setFighterB(b);
+        ranking.apply(result);
         return results.save(result);
     }
 

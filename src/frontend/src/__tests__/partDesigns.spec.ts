@@ -30,11 +30,11 @@ describe('Teile-Designs', () => {
 
   it('hat für jedes Teil im Katalog ein eigenes Design', () => {
     // muss zu src/backend/src/main/resources/parts/*.json passen
-    expect(Object.keys(WHEEL_DESIGNS)).toHaveLength(6)
-    expect(Object.keys(TRACK_DESIGNS)).toHaveLength(6)
-    expect(Object.keys(TIP_DESIGNS)).toHaveLength(6)
+    expect(Object.keys(WHEEL_DESIGNS)).toHaveLength(7)
+    expect(Object.keys(TRACK_DESIGNS)).toHaveLength(7)
+    expect(Object.keys(TIP_DESIGNS)).toHaveLength(7)
     const shapes = new Set(Object.values(WHEEL_DESIGNS).map((d) => d.shape))
-    expect(shapes.size).toBe(6)
+    expect(shapes.size).toBe(7)
   })
 
   it('findet Designs über den Modellpfad und fällt sonst auf die Werte zurück', () => {

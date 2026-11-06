@@ -2,6 +2,8 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import BaukastenView from '../views/BaukastenView.vue'
 import RanglisteView from '../views/RanglisteView.vue'
+import { clearSession, setSession } from '../auth'
+import { clearMe } from '../stores/me'
 
 const part = (id: number, name: string) => ({
   id,
@@ -103,8 +105,29 @@ describe('BaukastenView mit mehreren Kreiseln', () => {
   })
 })
 
+const rank = (rating: number, tier: string, division: number | null, league: string) => ({
+  rating,
+  tier,
+  division,
+  league,
+  divisionFloor: rating,
+  progress: 0,
+  nextLeague: null,
+  pointsToNext: null,
+  level: 2,
+  xp: 80,
+  xpLevelStart: 50,
+  xpNextLevel: 200,
+})
+
 describe('RanglisteView', () => {
-  it('zeigt die Rangliste mit eigener Platzierung', async () => {
+  afterEach(() => {
+    clearSession()
+    clearMe()
+  })
+
+  it('zeigt die Rangliste mit Ligen und eigener Platzierung', async () => {
+    setSession('token', 'demo')
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
@@ -112,17 +135,44 @@ describe('RanglisteView', () => {
           return new Response(
             JSON.stringify({
               entries: [
-                { rank: 1, username: 'rivale', wins: 4, losses: 1 },
-                { rank: 2, username: 'demo', wins: 2, losses: 2 },
+                {
+                  rank: 1,
+                  username: 'anna',
+                  wins: 4,
+                  losses: 1,
+                  ranking: rank(1130, 'Silber', 3, 'Silber III'),
+                },
+                {
+                  rank: 2,
+                  username: 'demo',
+                  wins: 2,
+                  losses: 2,
+                  ranking: rank(1010, 'Bronze', 2, 'Bronze II'),
+                },
               ],
-              me: { rank: 2, username: 'demo', wins: 2, losses: 2 },
+              me: {
+                rank: 2,
+                username: 'demo',
+                wins: 2,
+                losses: 2,
+                ranking: rank(1010, 'Bronze', 2, 'Bronze II'),
+              },
               totalPlayers: 2,
               empty: false,
             }),
           )
         }
         return new Response(
-          JSON.stringify({ username: 'demo', wins: 2, losses: 2, winRate: 50, rank: 2 }),
+          JSON.stringify({
+            username: 'demo',
+            wins: 2,
+            losses: 2,
+            winRate: 50,
+            rank: 2,
+            botWins: 0,
+            botLosses: 0,
+            ranking: rank(1010, 'Bronze', 2, 'Bronze II'),
+          }),
         )
       }),
     )
@@ -133,16 +183,27 @@ describe('RanglisteView', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
     expect(wrapper.find('tr.me').text()).toContain('demo')
     expect(wrapper.text()).toContain('#2')
+    expect(wrapper.text()).toContain('Silber III')
+    expect(wrapper.find('tr.me').text()).toContain('Bronze II')
+    expect(wrapper.text()).toContain('1.010')
   })
 
   it('zeigt „Noch keine Kämpfe“ ohne Ergebnisse', async () => {
+    setSession('token', 'demo')
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) =>
         url.startsWith('/api/leaderboard')
           ? new Response(JSON.stringify({ entries: [], me: null, totalPlayers: 0, empty: true }))
           : new Response(
-              JSON.stringify({ username: 'demo', wins: 0, losses: 0, winRate: 0, rank: null }),
+              JSON.stringify({
+                username: 'demo',
+                wins: 0,
+                losses: 0,
+                winRate: 0,
+                rank: null,
+                ranking: rank(950, 'Bronze', 3, 'Bronze III'),
+              }),
             ),
       ),
     )

@@ -6,6 +6,7 @@ import org.example.game.FinishType;
 import org.example.game.Side;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Entity
 public class BattleResult {
@@ -85,7 +86,11 @@ public class BattleResult {
     })
     private FighterSnapshot fighterB;
 
-    private Instant playedAt = Instant.now();
+    /** Liga-Punkte-Änderung, {@code null} bei Altbestand oder für die KI-Seite. */
+    private Integer ratingDeltaWinner;
+    private Integer ratingDeltaLoser;
+
+    private Instant playedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
     public Long getId() {
         return id;
@@ -120,6 +125,11 @@ public class BattleResult {
     public void setFighterA(FighterSnapshot fighterA) { this.fighterA = fighterA; }
     public FighterSnapshot getFighterB() { return fighterB; }
     public void setFighterB(FighterSnapshot fighterB) { this.fighterB = fighterB; }
+
+    public Integer getRatingDeltaWinner() { return ratingDeltaWinner; }
+    public void setRatingDeltaWinner(Integer ratingDeltaWinner) { this.ratingDeltaWinner = ratingDeltaWinner; }
+    public Integer getRatingDeltaLoser() { return ratingDeltaLoser; }
+    public void setRatingDeltaLoser(Integer ratingDeltaLoser) { this.ratingDeltaLoser = ratingDeltaLoser; }
 
     public FighterSnapshot fighter(Side side) {
         return side == Side.A ? fighterA : fighterB;

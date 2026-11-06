@@ -194,6 +194,7 @@ function bladeShape(shape: WheelDesign['shape']): Shape {
       s.quadraticCurveTo(0.68, 0.12, 0.5, 0.16)
       break
     case 'fang':
+    case 'feather':
       s.moveTo(0.5, -0.17)
       s.quadraticCurveTo(0.8, -0.14, 0.99, 0.02)
       s.lineTo(0.86, 0.06)
@@ -332,6 +333,7 @@ const TRACK_HEIGHT: Record<TrackDesign['style'], number> = {
   tower: 0.4,
   bastion: 0.26,
   spring: 0.36,
+  chalice: 0.3,
 }
 
 export function buildTrack(d: TrackDesign, mats: MaterialCache): BuiltPart {
@@ -377,7 +379,8 @@ export function buildTrack(d: TrackDesign, mats: MaterialCache): BuiltPart {
       b.add(gear(), 'metal', d.metal, top - 0.05)
       break
     }
-    case 'tower': {
+    case 'tower':
+    case 'chalice': {
       for (let i = 0; i < 3; i++) {
         const ring = new TorusGeometry(0.22, 0.03, 12, 64)
         ring.rotateX(Math.PI / 2)
@@ -451,7 +454,8 @@ export function buildTip(d: TipDesign, mats: MaterialCache): BuiltPart {
     case 'flat':
       b.add(chamferedDisc(0.15, 0.1, 0.02), 'rubber', d.color, -0.08)
       break
-    case 'needle': {
+    case 'needle':
+    case 'spear': {
       const g = new ConeGeometry(0.09, 0.13, 32)
       g.rotateX(Math.PI)
       b.add(g, 'chrome', d.color, -0.095)

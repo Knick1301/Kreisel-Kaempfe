@@ -11,6 +11,7 @@ import org.example.services.BattleService;
 import org.example.services.BeybladeService;
 import org.example.services.LeaderboardService;
 import org.example.services.LobbyService;
+import org.example.services.RankingService;
 import org.example.services.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,17 @@ class GameFlowTest {
 
     private Beyblade firstBeyblade(String username) {
         return beyblades.forUser(username).getFirst();
+    }
+
+    /** Echter Testspieler mit einem Kreisel (gleiche Teile wie demo). Mehrfach aufrufbar. */
+    private String player(String name) {
+        if (userRepository.findByUsername(name).isEmpty()) {
+            users.register(name, "geheim123");
+            Beyblade d = firstBeyblade("demo");
+            beyblades.create(name, new BeybladeRequest("Testkreisel", d.getFusionWheel().getId(),
+                    d.getSpinTrack().getId(), d.getTip().getId()));
+        }
+        return name;
     }
 
     @Test
@@ -99,7 +111,7 @@ class GameFlowTest {
 
     @Test
     void fremdeKreiselKannManNichtAendern() {
-        Beyblade theirs = firstBeyblade("rivale");
+        Beyblade theirs = firstBeyblade(player("rivale"));
         ResponseStatusException e = assertThrows(ResponseStatusException.class,
                 () -> beyblades.delete("demo", theirs.getId()));
         assertEquals(HttpStatus.NOT_FOUND, status(e));
@@ -107,7 +119,22 @@ class GameFlowTest {
 
     @Test
     void schnellesMatchSpeichertErgebnisUndZaehltInDerRangliste() {
-        BattleResult result = battles.quickMatch("demo", firstBeyblade("demo").getId());
+        player("rivale");
+        int demoBefore = RankingService.rating(userRepository.findByUsername("demo").orElseThrow());
+        int rivaleBefore = RankingService.rating(userRepository.findByUsername("rivale").orElseThrow());
+        BattleResult result = battles.fight(userRepository.findByUsername("demo").orElseThrow(),
+                firstBeyblade("demo"), userRepository.findByUsername("rivale").orElseThrow(),
+                firstBeyblade("rivale"));
+        User demo = userRepository.findByUsername("demo").orElseThrow();
+        User rivale = userRepository.findByUsername("rivale").orElseThrow();
+        boolean demoWon = result.getWinner().getUsername().equals("demo");
+        int winnerBefore = demoWon ? demoBefore : rivaleBefore;
+        int winnerAfter = demoWon ? demo.getRating() : rivale.getRating();
+        assertEquals(winnerBefore + result.getRatingDeltaWinner(), winnerAfter);
+        assertEquals(result.getRatingDeltaWinner(), -result.getRatingDeltaLoser());
+        assertTrue(demo.getRating() >= RankingService.START_RATING);
+        assertTrue(rivale.getRating() >= RankingService.START_RATING);
+        assertTrue(rivale.getXp() == 100 || rivale.getXp() == 40);
 
         assertNotNull(result.getId());
         assertTrue(result.getWinner().getUsername().equals("demo") || result.getLoser().getUsername().equals("demo"));
@@ -122,12 +149,12 @@ class GameFlowTest {
         assertEquals(LobbyStatus.OPEN, lobby.getStatus());
         assertTrue(lobbies.open().contains(lobby));
 
-        lobbies.join(lobby.getId().toLowerCase(), "rivale", firstBeyblade("rivale").getId());
+        lobbies.join(lobby.getId().toLowerCase(), player("rivale"), firstBeyblade(player("rivale")).getId());
         assertEquals(LobbyStatus.READY, lobby.getStatus());
         assertTrue(!lobbies.open().contains(lobby));
 
         ResponseStatusException notHost = assertThrows(ResponseStatusException.class,
-                () -> lobbies.start(lobby.getId(), "rivale"));
+                () -> lobbies.start(lobby.getId(), player("rivale")));
         assertEquals(HttpStatus.FORBIDDEN, status(notHost));
 
         BattleResult result = lobbies.start(lobby.getId(), "demo");
@@ -137,17 +164,17 @@ class GameFlowTest {
 
     @Test
     void lobbyRegeln() {
-        Long demoBey = firstBeyblade("wirbelwind").getId();
-        Lobby lobby = lobbies.create("Regeln", "wirbelwind", demoBey);
+        Long demoBey = firstBeyblade(player("wirbelwind")).getId();
+        Lobby lobby = lobbies.create("Regeln", player("wirbelwind"), demoBey);
 
         assertEquals(HttpStatus.BAD_REQUEST, status(assertThrows(ResponseStatusException.class,
-                () -> lobbies.join(lobby.getId(), "wirbelwind", demoBey))));
+                () -> lobbies.join(lobby.getId(), player("wirbelwind"), demoBey))));
         assertEquals(HttpStatus.CONFLICT, status(assertThrows(ResponseStatusException.class,
-                () -> lobbies.start(lobby.getId(), "wirbelwind"))));
+                () -> lobbies.start(lobby.getId(), player("wirbelwind")))));
         assertEquals(HttpStatus.CONFLICT, status(assertThrows(ResponseStatusException.class,
-                () -> lobbies.create("Zweite", "wirbelwind", demoBey))));
+                () -> lobbies.create("Zweite", player("wirbelwind"), demoBey))));
 
-        lobbies.leave(lobby.getId(), "wirbelwind");
+        lobbies.leave(lobby.getId(), player("wirbelwind"));
         assertEquals(HttpStatus.NOT_FOUND, status(assertThrows(ResponseStatusException.class,
                 () -> lobbies.get(lobby.getId()))));
     }

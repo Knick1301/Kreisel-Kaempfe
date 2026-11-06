@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchBeyblades, fetchStats, type BeybladeDto, type PlayerStats } from '@/api'
+import { fetchBeyblades, type BeybladeDto } from '@/api'
 import { useModelUrls } from '@/composables/useModelUrls'
-import { player } from '@/player'
+import { me, refreshMe } from '@/stores/me'
+import LeagueBadge from '@/components/LeagueBadge.vue'
 import { hasWebGL } from '@/webgl'
 import { pickActive, setActiveId } from '@/activeBeyblade'
 import BeybladeSpinner from '@/components/BeybladeSpinner.vue'
@@ -27,12 +28,18 @@ const error = ref<string | null>(null)
 const spinKey = ref(0)
 
 const router = useRouter()
-const playerStats = ref<PlayerStats | null>(null)
+const rank = computed(() => me.rank)
+/** Siegquote über alle Kämpfe, auch gegen die KI */
+const winRate = computed(() => {
+  const s = me.stats
+  if (!s) return null
+  const wins = s.wins + (s.botWins ?? 0)
+  const total = wins + s.losses + (s.botLosses ?? 0)
+  return total === 0 ? null : Math.round((100 * wins) / total)
+})
 
 onMounted(async () => {
-  fetchStats()
-    .then((s) => (playerStats.value = typeof s?.winRate === 'number' ? s : null))
-    .catch(() => {})
+  refreshMe()
   try {
     const list = await fetchBeyblades()
     beyblades.value = Array.isArray(list) ? list : []
@@ -94,8 +101,6 @@ function startQuickMatch() {
   setActiveId(beyblade.value.id)
   router?.push({ name: 'kampf', query: { bey: beyblade.value.id } })
 }
-
-const leagueProgress = (player.leaguePoints / player.leaguePointsMax) * 100
 
 const webgl = hasWebGL()
 </script>
@@ -190,22 +195,26 @@ const webgl = hasWebGL()
           </header>
 
           <div class="panel-body">
-            <div class="league-head">
-              <strong>{{ player.league }}</strong>
-              <span class="mono">
-                {{ player.leaguePoints }}<span class="faint">/{{ player.leaguePointsMax }}</span>
-              </span>
-            </div>
-            <div class="league-bar"><span :style="{ width: `${leagueProgress}%` }" /></div>
-            <div class="league-meta">
-              <span
-                >Noch {{ player.leaguePointsMax - player.leaguePoints }} bis
-                {{ player.nextLeague }}</span
-              >
-              <span class="mono">
-                {{ playerStats ? `${playerStats.winRate} % Siege` : '–' }}
-              </span>
-            </div>
+            <p v-if="!rank" class="hint">Lade Liga …</p>
+            <template v-else>
+              <div class="league-head">
+                <span class="league-name">
+                  <LeagueBadge :tier="rank.tier" :division="rank.division" :size="34" />
+                  <strong>{{ rank.league }}</strong>
+                </span>
+                <span class="mono">{{ rank.rating }}<span class="faint"> LP</span></span>
+              </div>
+              <div class="league-bar"><span :style="{ width: `${rank.progress}%` }" /></div>
+              <div class="league-meta">
+                <span v-if="rank.nextLeague">
+                  Noch {{ rank.pointsToNext }} bis {{ rank.nextLeague }}
+                </span>
+                <span v-else>Höchste Liga erreicht</span>
+                <span class="mono">
+                  {{ winRate === null ? 'Noch keine Kämpfe' : `${winRate} % Siege` }}
+                </span>
+              </div>
+            </template>
           </div>
         </RouterLink>
       </div>
@@ -363,6 +372,12 @@ const webgl = hasWebGL()
 
 .league:hover {
   border-color: var(--line-strong);
+}
+
+.league-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .league-head {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { auth, initials } from '@/auth'
-import { player } from '@/player'
+import { computed, watch } from 'vue'
+import { me, refreshMe } from '@/stores/me'
 import AppLogo from './AppLogo.vue'
+import LeagueBadge from './LeagueBadge.vue'
 
 const links = [
   { to: '/', label: 'Startseite' },
@@ -9,8 +11,27 @@ const links = [
   { to: '/rangliste', label: 'Rangliste' },
 ]
 
-const progress = player.leaguePoints / player.leaguePointsMax
+const rank = computed(() => me.rank)
+const divisionPoints = computed(() =>
+  rank.value ? rank.value.rating - rank.value.divisionFloor : 0,
+)
+const divisionSize = computed(() =>
+  rank.value?.pointsToNext != null ? divisionPoints.value + rank.value.pointsToNext : null,
+)
+const xpProgress = computed(() => {
+  const r = rank.value
+  if (!r) return 0
+  return Math.min(1, (r.xp - r.xpLevelStart) / Math.max(1, r.xpNextLevel - r.xpLevelStart))
+})
 const RING = 2 * Math.PI * 21
+
+watch(
+  () => auth.loggedIn,
+  (loggedIn) => {
+    if (loggedIn) refreshMe()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -34,12 +55,16 @@ const RING = 2 * Math.PI * 21
     </nav>
 
     <div v-if="auth.loggedIn" class="me">
-      <RouterLink to="/rangliste" class="league">
-        <span class="league-top">
-          <span>{{ player.league }}</span>
-          <span class="faint">{{ player.leaguePoints }}/{{ player.leaguePointsMax }}</span>
+      <RouterLink v-if="rank" to="/rangliste" class="league" :title="`${rank.rating} Liga-Punkte`">
+        <LeagueBadge :tier="rank.tier" :division="rank.division" :size="26" />
+        <span class="league-text">
+          <span class="league-top">
+            <span>{{ rank.league }}</span>
+            <span v-if="divisionSize" class="faint">{{ divisionPoints }}/{{ divisionSize }}</span>
+            <span v-else class="faint">{{ rank.rating }}</span>
+          </span>
+          <span class="league-bar"><span :style="{ width: `${rank.progress}%` }" /></span>
         </span>
-        <span class="league-bar"><span :style="{ width: `${progress * 100}%` }" /></span>
       </RouterLink>
 
       <RouterLink
@@ -56,11 +81,13 @@ const RING = 2 * Math.PI * 21
             cy="23"
             r="21"
             class="ring-fill"
-            :stroke-dasharray="`${RING * progress} ${RING}`"
+            :stroke-dasharray="`${RING * xpProgress} ${RING}`"
           />
         </svg>
         <span class="initials">{{ initials }}</span>
-        <span class="level">{{ player.level }}</span>
+        <span v-if="rank" class="level" :title="`Level ${rank.level} · ${rank.xp} XP`">{{
+          rank.level
+        }}</span>
       </RouterLink>
     </div>
   </header>
@@ -153,15 +180,22 @@ const RING = 2 * Math.PI * 21
 }
 
 .league {
-  display: grid;
-  gap: 8px;
-  min-width: 190px;
-  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+  padding: 9px 14px 9px 12px;
   border: 1px solid var(--line);
   border-radius: 3px;
   font-family: var(--font-mono);
   font-size: 0.8rem;
   transition: border-color 0.15s;
+}
+
+.league-text {
+  display: grid;
+  flex: 1;
+  gap: 8px;
 }
 
 .league:hover {

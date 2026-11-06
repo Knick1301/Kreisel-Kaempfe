@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.entities.BattleResult;
 import org.example.repositories.BattleResultRepository;
+import org.example.services.RankingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -116,7 +117,7 @@ class BattleApiTest {
     }
 
     @Test
-    void botKaempfeZaehlenFuersProfilAberNichtFuerDieRangliste() throws Exception {
+    void botKaempfeZaehlenReduziertFuerLigaUndRangliste() throws Exception {
         String auth = register("botfan4");
         long bey = buildBeyblade(auth);
         botBattle(auth, bey);
@@ -125,17 +126,22 @@ class BattleApiTest {
         mvc.perform(get("/api/me/stats").header("Authorization", auth))
                 .andExpect(jsonPath("$.wins").value(0))
                 .andExpect(jsonPath("$.losses").value(0))
-                .andExpect(jsonPath("$.rank").doesNotExist())
+                .andExpect(jsonPath("$.rank").exists())
                 .andExpect(result -> {
                     JsonNode s = json.readTree(result.getResponse().getContentAsString());
                     assertEquals(2, s.get("botWins").asLong() + s.get("botLosses").asLong());
+                    int rating = s.get("ranking").get("rating").asInt();
+                    long botWins = s.get("botWins").asLong();
+                    assertTrue(rating >= RankingService.START_RATING
+                                    && rating <= RankingService.START_RATING + 6 * botWins,
+                            "KI-Kämpfe zählen ×0,4 und nie unter den Startwert");
+                    assertTrue(s.get("ranking").get("xp").asInt() > 0);
                 });
 
         JsonNode board = json.readTree(mvc.perform(get("/api/leaderboard?limit=100").header("Authorization", auth))
                 .andReturn().getResponse().getContentAsString());
         for (JsonNode e : board.get("entries")) {
             assertFalse(e.get("username").asText().equals("KI"), "KI darf nicht in der Rangliste stehen");
-            assertFalse(e.get("username").asText().equals("botfan4"));
         }
 
         mvc.perform(get("/api/me/battles").header("Authorization", auth))

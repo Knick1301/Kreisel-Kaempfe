@@ -20,19 +20,22 @@ import java.util.List;
 public record BattleReportDto(Long id, String winner, String loser, String winnerBeyblade,
                               String loserBeyblade, FinishType finish, int rounds, Instant playedAt,
                               BattleMode mode, Long seed, Integer durationMs, Side winnerSide, ArenaDto arena,
-                              List<FighterDto> fighters, MatchupDto matchup, TimelineDto timeline) {
+                              List<FighterDto> fighters, MatchupDto matchup, TimelineDto timeline,
+                              Integer ratingDeltaWinner, Integer ratingDeltaLoser) {
 
     public static BattleReportDto from(BattleResult r) {
         return new BattleReportDto(r.getId(), r.getWinner().getUsername(), r.getLoser().getUsername(),
                 r.getWinnerBeyblade(), r.getLoserBeyblade(), r.getFinish(), r.getRounds(), r.getPlayedAt(),
-                mode(r), null, r.getDurationMs(), r.getWinnerSide(), null, null, null, null);
+                mode(r), null, r.getDurationMs(), r.getWinnerSide(), null, null, null, null,
+                r.getRatingDeltaWinner(), r.getRatingDeltaLoser());
     }
 
     public static BattleReportDto full(BattleResult r, ArenaDto arena, List<FighterDto> fighters,
                                        MatchupDto matchup, TimelineDto timeline) {
         return new BattleReportDto(r.getId(), r.getWinner().getUsername(), r.getLoser().getUsername(),
                 r.getWinnerBeyblade(), r.getLoserBeyblade(), r.getFinish(), r.getRounds(), r.getPlayedAt(),
-                mode(r), r.getSeed(), r.getDurationMs(), r.getWinnerSide(), arena, fighters, matchup, timeline);
+                mode(r), r.getSeed(), r.getDurationMs(), r.getWinnerSide(), arena, fighters, matchup, timeline,
+                r.getRatingDeltaWinner(), r.getRatingDeltaLoser());
     }
 
     private static BattleMode mode(BattleResult r) {

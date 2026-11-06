@@ -1,21 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { fetchLeaderboard, fetchStats, type Leaderboard, type PlayerStats } from '@/api'
-import { player } from '@/player'
+import { fetchLeaderboard, type Leaderboard } from '@/api'
+import { me, refreshMe } from '@/stores/me'
+import LeagueBadge from '@/components/LeagueBadge.vue'
 
 const fmt = new Intl.NumberFormat('de-DE')
 const rankNo = (n: number) => (n < 100 ? String(n).padStart(2, '0') : fmt.format(n))
 
 const board = ref<Leaderboard | null>(null)
-const stats = ref<PlayerStats | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    const [b, s] = await Promise.all([fetchLeaderboard(10), fetchStats()])
+    const [b] = await Promise.all([fetchLeaderboard(25), refreshMe()])
     board.value = b
-    stats.value = s
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -23,12 +22,32 @@ onMounted(async () => {
   }
 })
 
-const kpis = computed(() => {
+const stats = computed(() => me.stats)
+const rank = computed(() => me.rank)
+
+/** Bilanz über alle Kämpfe, auch gegen die KI */
+const totals = computed(() => {
   const s = stats.value
+  if (!s) return null
+  const wins = s.wins + (s.botWins ?? 0)
+  const losses = s.losses + (s.botLosses ?? 0)
+  return {
+    wins,
+    losses,
+    rate: wins + losses === 0 ? null : Math.round((100 * wins) / (wins + losses)),
+  }
+})
+
+const kpis = computed(() => {
+  const t = totals.value
   return [
-    { label: 'Siege', value: s ? fmt.format(s.wins) : '–' },
-    { label: 'Niederlagen', value: s ? fmt.format(s.losses) : '–' },
-    { label: 'Siegquote', value: s ? String(s.winRate) : '–', unit: s ? '%' : '' },
+    { label: 'Liga-Punkte', value: rank.value ? fmt.format(rank.value.rating) : '–' },
+    { label: 'Siege', value: t ? fmt.format(t.wins) : '–' },
+    {
+      label: 'Siegquote',
+      value: t?.rate != null ? String(t.rate) : '–',
+      unit: t?.rate != null ? '%' : '',
+    },
   ]
 })
 
@@ -37,8 +56,6 @@ const meBelow = computed(() => {
   if (!b?.me) return null
   return b.entries.some((e) => e.username === b.me!.username) ? null : b.me
 })
-
-const progress = (player.leaguePoints / player.leaguePointsMax) * 100
 
 const ticks = Array.from({ length: 120 }, (_, i) => ({
   angle: i * 3,
@@ -66,12 +83,13 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
     <div class="ranking">
       <header class="page-head">
         <div>
-          <span class="label"><i class="dot" />Sortiert nach Siegen</span>
+          <span class="label"><i class="dot" />Sortiert nach Liga-Punkten</span>
           <h1>Rangliste</h1>
         </div>
         <div class="my-rank">
           <span class="label">Dein Rang</span>
           <strong class="mono">{{ stats?.rank ? `#${fmt.format(stats.rank)}` : '–' }}</strong>
+          <span v-if="stats && !stats.rank" class="my-rank-hint">Nach deinem ersten Kampf</span>
         </div>
       </header>
 
@@ -88,15 +106,23 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
         <div class="panel kpi league">
           <div class="panel-body">
             <div class="league-head">
-              <span class="label">Liga · Platzhalter</span>
-              <span class="mono faint">{{ player.leaguePoints }}/{{ player.leaguePointsMax }}</span>
+              <span class="label">Deine Liga</span>
+              <span v-if="rank" class="mono faint">Level {{ rank.level }}</span>
             </div>
-            <strong class="league-name">{{ player.league }}</strong>
-            <div class="league-bar"><span :style="{ width: `${progress}%` }" /></div>
-            <span class="league-sub">
-              Noch {{ player.leaguePointsMax - player.leaguePoints }} Punkte bis
-              {{ player.nextLeague }}
-            </span>
+            <template v-if="rank">
+              <span class="league-title">
+                <LeagueBadge :tier="rank.tier" :division="rank.division" :size="40" />
+                <strong class="league-name">{{ rank.league }}</strong>
+              </span>
+              <div class="league-bar"><span :style="{ width: `${rank.progress}%` }" /></div>
+              <span class="league-sub">
+                <template v-if="rank.nextLeague">
+                  Noch {{ rank.pointsToNext }} Punkte bis {{ rank.nextLeague }}
+                </template>
+                <template v-else>Höchste Liga erreicht</template>
+              </span>
+            </template>
+            <span v-else class="league-sub">Lade …</span>
           </div>
         </div>
       </section>
@@ -111,7 +137,7 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
         <p v-else-if="loading" class="board-hint">Lade Rangliste …</p>
         <div v-else-if="board?.empty" class="board-empty">
           <strong>Noch keine Kämpfe</strong>
-          <p>Sobald der erste Kampf gespeichert ist, erscheint hier die Rangliste.</p>
+          <p>Sobald jemand gewertet gekämpft hat, erscheint hier die Rangliste.</p>
           <RouterLink to="/" class="btn-secondary">Zum Schnellen Match <span>→</span></RouterLink>
         </div>
 
@@ -120,8 +146,9 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
             <tr>
               <th class="col-rank">Rang</th>
               <th>Spieler</th>
+              <th>Liga</th>
               <th>Bilanz</th>
-              <th class="col-wins">Siege</th>
+              <th class="col-wins">LP</th>
             </tr>
           </thead>
           <tbody>
@@ -136,13 +163,23 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
                 <span v-if="row.username === board.me?.username" class="chip you">Du</span>
               </td>
               <td>
+                <span class="league-cell">
+                  <LeagueBadge
+                    :tier="row.ranking.tier"
+                    :division="row.ranking.division"
+                    :size="22"
+                  />
+                  {{ row.ranking.league }}
+                </span>
+              </td>
+              <td>
                 <span class="chip">{{ row.wins }}S · {{ row.losses }}N</span>
               </td>
-              <td class="col-wins mono">{{ fmt.format(row.wins) }}</td>
+              <td class="col-wins mono">{{ fmt.format(row.ranking.rating) }}</td>
             </tr>
             <template v-if="meBelow">
               <tr class="gap" aria-hidden="true">
-                <td colspan="4">· · ·</td>
+                <td colspan="5">· · ·</td>
               </tr>
               <tr class="me">
                 <td class="col-rank mono">{{ rankNo(meBelow.rank) }}</td>
@@ -151,9 +188,19 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
                   <span class="chip you">Du</span>
                 </td>
                 <td>
+                  <span class="league-cell">
+                    <LeagueBadge
+                      :tier="meBelow.ranking.tier"
+                      :division="meBelow.ranking.division"
+                      :size="22"
+                    />
+                    {{ meBelow.ranking.league }}
+                  </span>
+                </td>
+                <td>
                   <span class="chip">{{ meBelow.wins }}S · {{ meBelow.losses }}N</span>
                 </td>
-                <td class="col-wins mono">{{ fmt.format(meBelow.wins) }}</td>
+                <td class="col-wins mono">{{ fmt.format(meBelow.ranking.rating) }}</td>
               </tr>
             </template>
           </tbody>
@@ -262,6 +309,25 @@ const ticks = Array.from({ length: 120 }, (_, i) => ({
   display: flex;
   justify-content: space-between;
   font-size: 0.8rem;
+}
+
+.league-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.league-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.my-rank-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .league-name {
@@ -458,8 +524,8 @@ tr.me .chip {
     font-size: 1.2rem;
   }
 
-  th:nth-child(3),
-  td:nth-child(3) {
+  th:nth-child(4),
+  td:nth-child(4) {
     display: none;
   }
 }

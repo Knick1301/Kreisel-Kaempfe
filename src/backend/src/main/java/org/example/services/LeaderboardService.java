@@ -3,8 +3,11 @@ package org.example.services;
 import org.example.dtos.LeaderboardDto;
 import org.example.dtos.LeaderboardEntry;
 import org.example.dtos.PlayerStatsDto;
+import org.example.entities.User;
 import org.example.repositories.BattleResultRepository;
+import org.example.repositories.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -12,60 +15,80 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Rangliste nach Liga-Punkten, bei Gleichstand nach Siegen. */
 @Service
 public class LeaderboardService {
 
     private final BattleResultRepository results;
+    private final UserRepository users;
+    private final RankingService ranking;
 
-    public LeaderboardService(BattleResultRepository results) {
+    public LeaderboardService(BattleResultRepository results, UserRepository users, RankingService ranking) {
         this.results = results;
+        this.users = users;
+        this.ranking = ranking;
     }
 
+    @Transactional(readOnly = true)
     public LeaderboardDto leaderboard(String username, int limit) {
         List<LeaderboardEntry> all = ranking();
         LeaderboardEntry me = find(all, username);
         return new LeaderboardDto(all.stream().limit(limit).toList(), me, all.size(), all.isEmpty());
     }
 
-    /** Siege, Niederlagen, Quote und Rang nur aus PvP-Kämpfen, die KI-Bilanz kommt getrennt dazu. */
+    /** Siege und Niederlagen gegen echte Spieler, KI-Bilanz getrennt, dazu Liga und Level. */
+    @Transactional(readOnly = true)
     public PlayerStatsDto stats(String username) {
         LeaderboardEntry me = find(ranking(), username);
+        long[] pvp = pvpCounts(username);
         long botWins = results.countBotWins(username);
         long botLosses = results.countBotLosses(username);
-        if (me == null) {
-            return new PlayerStatsDto(username, 0, 0, 0, null, botWins, botLosses);
-        }
-        int winRate = (int) Math.round(100.0 * me.wins() / me.battles());
-        return new PlayerStatsDto(username, me.wins(), me.losses(), winRate, me.rank(), botWins, botLosses);
+        int winRate = pvp[0] + pvp[1] == 0 ? 0 : (int) Math.round(100.0 * pvp[0] / (pvp[0] + pvp[1]));
+        var rank = users.findByUsername(username).map(ranking::rankOf)
+                .orElseGet(() -> RankingService.rankOf(RankingService.START_RATING, 0));
+        return new PlayerStatsDto(username, pvp[0], pvp[1], winRate, me == null ? null : me.rank(),
+                botWins, botLosses, rank);
     }
 
     List<LeaderboardEntry> ranking() {
         Map<String, long[]> counts = new HashMap<>();
-        for (Object[] row : results.countWinsByUser()) {
+        for (Object[] row : results.countAllWinsByUser()) {
             counts.computeIfAbsent((String) row[0], k -> new long[2])[0] = ((Number) row[1]).longValue();
         }
-        for (Object[] row : results.countLossesByUser()) {
+        for (Object[] row : results.countAllLossesByUser()) {
             counts.computeIfAbsent((String) row[0], k -> new long[2])[1] = ((Number) row[1]).longValue();
         }
 
-        List<Map.Entry<String, long[]>> sorted = new ArrayList<>(counts.entrySet());
-        sorted.sort(Comparator.<Map.Entry<String, long[]>>comparingLong(e -> -e.getValue()[0])
-                .thenComparingLong(e -> e.getValue()[1])
-                .thenComparing(Map.Entry::getKey));
+        List<User> rated = new ArrayList<>(users.findByRatingIsNotNull());
+        rated.sort(Comparator.<User>comparingInt(u -> -RankingService.rating(u))
+                .thenComparingLong(u -> -counts.getOrDefault(u.getUsername(), new long[2])[0])
+                .thenComparing(User::getUsername));
 
         List<LeaderboardEntry> entries = new ArrayList<>();
-        for (int i = 0; i < sorted.size(); i++) {
-            long[] c = sorted.get(i).getValue();
-            int rank = i + 1;
+        for (int i = 0; i < rated.size(); i++) {
+            User u = rated.get(i);
+            long[] c = counts.getOrDefault(u.getUsername(), new long[2]);
+            int place = i + 1;
             if (i > 0) {
                 LeaderboardEntry prev = entries.get(i - 1);
-                if (prev.wins() == c[0] && prev.losses() == c[1]) {
-                    rank = prev.rank();
+                if (prev.ranking().rating() == RankingService.rating(u) && prev.wins() == c[0]) {
+                    place = prev.rank();
                 }
             }
-            entries.add(new LeaderboardEntry(rank, sorted.get(i).getKey(), c[0], c[1]));
+            entries.add(new LeaderboardEntry(place, u.getUsername(), c[0], c[1], ranking.rankOf(u)));
         }
         return entries;
+    }
+
+    private long[] pvpCounts(String username) {
+        long[] c = new long[2];
+        for (Object[] row : results.countWinsByUser()) {
+            if (username.equals(row[0])) c[0] = ((Number) row[1]).longValue();
+        }
+        for (Object[] row : results.countLossesByUser()) {
+            if (username.equals(row[0])) c[1] = ((Number) row[1]).longValue();
+        }
+        return c;
     }
 
     private static LeaderboardEntry find(List<LeaderboardEntry> entries, String username) {

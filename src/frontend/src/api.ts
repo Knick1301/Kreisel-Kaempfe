@@ -193,6 +193,9 @@ export interface BattleReport {
   matchup?: MatchupDto
   /** Fehlt, wenn sich der Kampf nicht exakt nachspielen lässt. */
   timeline?: BattleTimeline
+  /** Liga-Punkte-Änderung, fehlt bei Altbestand und für die KI-Seite */
+  ratingDeltaWinner?: number
+  ratingDeltaLoser?: number
 }
 
 export const FINISH_LABEL: Record<FinishType, string> = {
@@ -227,11 +230,29 @@ export function fetchBattles(limit = 10) {
   return get<BattleReport[]>(`/me/battles?limit=${limit}`)
 }
 
+/** Liga-Stand. `division` 1–3 (III ist die unterste), in der Meister-Liga `null`. */
+export interface Rank {
+  rating: number
+  tier: string
+  division: number | null
+  league: string
+  divisionFloor: number
+  progress: number
+  nextLeague: string | null
+  pointsToNext: number | null
+  level: number
+  xp: number
+  xpLevelStart: number
+  xpNextLevel: number
+}
+
 export interface LeaderboardEntry {
   rank: number
   username: string
+  /** alle Kämpfe, auch gegen die KI */
   wins: number
   losses: number
+  ranking: Rank
 }
 
 export interface Leaderboard {
@@ -252,9 +273,10 @@ export interface PlayerStats {
   losses: number
   winRate: number
   rank: number | null
-  /** Bilanz gegen KI-Gegner (nur Profil) */
+  /** Bilanz gegen KI-Gegner */
   botWins?: number
   botLosses?: number
+  ranking: Rank
 }
 
 export function fetchStats() {

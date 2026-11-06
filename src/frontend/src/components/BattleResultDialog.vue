@@ -3,6 +3,9 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { ARCHETYPE_LABEL, FINISH_LABEL, type BattleReport, type Side } from '@/api'
 import { auth } from '@/auth'
 import { fighterOf, formatClock, matchupLabel, other } from '@/game/playback'
+import { leagueChange, leagueOf } from '@/game/league'
+import { me as meStore } from '@/stores/me'
+import LeagueBadge from './LeagueBadge.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -15,6 +18,8 @@ const props = withDefaults(
     replayLabel?: string
     againLabel?: string
     note?: string | null
+    /** Kampf gerade ausgetragen: Liga-Punkte und neue Liga anzeigen */
+    fresh?: boolean
   }>(),
   {
     again: true,
@@ -23,6 +28,7 @@ const props = withDefaults(
     replayLabel: 'Replay',
     againLabel: 'Nochmal kämpfen',
     note: null,
+    fresh: false,
   },
 )
 const emit = defineEmits<{ close: []; again: []; replay: [] }>()
@@ -63,6 +69,20 @@ const opponent = computed(() =>
     : { name: props.report.winner, bey: props.report.winnerBeyblade },
 )
 
+const delta = computed(
+  () => (won.value ? props.report.ratingDeltaWinner : props.report.ratingDeltaLoser) ?? null,
+)
+const rank = computed(() => (props.fresh ? meStore.rank : null))
+const change = computed(() => {
+  const r = rank.value
+  if (!r || delta.value === null) return 0
+  return leagueChange(r.rating - delta.value, r.rating)
+})
+const previousLeague = computed(() =>
+  rank.value && delta.value !== null ? leagueOf(rank.value.rating - delta.value) : null,
+)
+const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '±0')
+
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
 }
@@ -96,6 +116,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </dl>
         <p v-if="note" class="note">{{ note }}</p>
 
+        <div v-if="rank" class="ranking" :class="{ promoted: change > 0, demoted: change < 0 }">
+          <LeagueBadge :tier="rank.tier" :division="rank.division" :size="40" class="badge" />
+          <div class="ranking-text">
+            <span class="ranking-head">
+              <strong>{{ rank.league }}</strong>
+              <span v-if="delta !== null" class="lp mono">{{ signed(delta) }} LP</span>
+              <span v-else class="lp mono faint">keine Liga-Punkte</span>
+            </span>
+            <div class="ranking-bar"><span :style="{ width: `${rank.progress}%` }" /></div>
+            <span class="ranking-sub">
+              <template v-if="change > 0">Aufstieg aus {{ previousLeague }}!</template>
+              <template v-else-if="change < 0">Abstieg aus {{ previousLeague }}</template>
+              <template v-else-if="rank.nextLeague">
+                Noch {{ rank.pointsToNext }} bis {{ rank.nextLeague }}
+              </template>
+              <template v-else>Höchste Liga</template>
+            </span>
+          </div>
+        </div>
+
         <div class="versus">
           <div class="side" :class="{ winner: won }">
             <span class="label">Du</span>
@@ -126,6 +166,98 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </template>
 
 <style scoped>
+.ranking {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #0c0c0e;
+}
+
+.ranking.promoted {
+  border-color: var(--text);
+  animation: promote 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ranking.promoted .badge {
+  animation: badge-pop 0.9s cubic-bezier(0.2, 1.6, 0.4, 1) 0.2s both;
+}
+
+.ranking-text {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+}
+
+.ranking-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ranking-head strong {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.lp {
+  font-size: 0.95rem;
+}
+
+.faint {
+  color: var(--text-faint);
+  font-size: 0.78rem;
+}
+
+.ranking-bar {
+  height: 4px;
+  background: var(--line);
+}
+
+.ranking-bar span {
+  display: block;
+  height: 100%;
+  background: var(--text);
+  transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ranking-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.promoted .ranking-sub {
+  color: var(--text);
+  font-weight: 600;
+}
+
+@keyframes promote {
+  0% {
+    box-shadow: 0 0 0 0 rgba(237, 237, 239, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(237, 237, 239, 0);
+  }
+}
+
+@keyframes badge-pop {
+  from {
+    transform: scale(0.4) rotate(-90deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ranking.promoted,
+  .ranking.promoted .badge {
+    animation: none;
+  }
+}
+
 .backdrop {
   position: fixed;
   inset: 0;
