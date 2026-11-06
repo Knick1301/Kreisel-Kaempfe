@@ -7,6 +7,7 @@ import org.example.game.Arena;
 import org.example.game.Battle;
 import org.example.game.BattleOutcome;
 import org.example.game.Fighter;
+import org.example.game.Side;
 import org.example.repositories.BattleResultRepository;
 import org.example.repositories.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -38,16 +39,16 @@ public class BattleService {
         }
         Fighter a = new Fighter(userA.getUsername(), beybladeA.getName(), beybladeA.getStats());
         Fighter b = new Fighter(userB.getUsername(), beybladeB.getName(), beybladeB.getStats());
-        BattleOutcome outcome = new Battle(Arena.standard(), a, b, random).run();
+        BattleOutcome outcome = new Battle(Arena.standard(), a, b, random.nextLong()).run();
 
-        boolean aWon = outcome.winner() == a;
+        boolean aWon = outcome.winnerSide() == Side.A;
         BattleResult result = new BattleResult();
         result.setWinner(aWon ? userA : userB);
         result.setLoser(aWon ? userB : userA);
         result.setWinnerBeyblade(outcome.winner().beyblade());
         result.setLoserBeyblade(outcome.loser().beyblade());
         result.setFinish(outcome.finish());
-        result.setRounds(outcome.rounds());
+        result.setRounds(0);
         return results.save(result);
     }
 
