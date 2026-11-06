@@ -213,8 +213,16 @@ onBeforeRender(({ delta }) => {
     <TresMeshBasicMaterial :map="shadowTexture" transparent :depth-write="false" />
   </TresMesh>
 
-  <BattleFighter ref="fighterA" :fighter="report.fighters?.[0]" />
-  <BattleFighter ref="fighterB" :fighter="report.fighters?.[1]" />
+  <BattleFighter
+    ref="fighterA"
+    :fighter="report.fighters?.[0]"
+    :seed="(report.seed ?? report.id) + 1"
+  />
+  <BattleFighter
+    ref="fighterB"
+    :fighter="report.fighters?.[1]"
+    :seed="(report.seed ?? report.id) + 2"
+  />
 
   <primitive :object="sparks.object" />
 </template>

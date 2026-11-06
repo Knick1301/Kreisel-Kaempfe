@@ -1,25 +1,37 @@
 <script setup lang="ts">
-import { onUnmounted, shallowRef } from 'vue'
+import { computed, onUnmounted, shallowRef } from 'vue'
 import { Euler, Quaternion, Vector3, type Group, type Material } from 'three'
 import type { FighterDto } from '@/api'
 import { BEY_SIZE } from '@/game/arenas'
 import type { FighterPose, PartPose } from '@/game/choreographer'
+import { botDesigns, designsFor } from '@/game/partDesigns'
 import { useModelUrls } from '@/composables/useModelUrls'
 import BeybladeRotor from '../BeybladeRotor.vue'
-import PlaceholderRotor from '../PlaceholderRotor.vue'
+import ProceduralRotor from '../ProceduralRotor.vue'
 import { makeMetallic } from '../materials'
 import type { RotorPart } from '../rotorParts'
 
-/** Ein Kämpfer in der Arena: echtes Modell, wenn alle GLBs da sind, sonst der Platzhalter. */
-const props = defineProps<{ fighter: FighterDto | undefined }>()
-
-const PLACEHOLDER_SCALE = BEY_SIZE / 1.9
+/** Ein Kämpfer in der Arena: GLB-Modell, wenn alle drei Dateien da sind, sonst das prozedurale Modell. */
+const props = defineProps<{ fighter: FighterDto | undefined; seed: number }>()
 
 const urls = useModelUrls(() => props.fighter?.parts ?? [])
+const designs = computed(() => {
+  const f = props.fighter
+  if (f?.parts?.length === 3) return designsFor(f.parts)
+  const stats = f?.stats ?? {
+    attack: 4,
+    defense: 6,
+    stamina: 10,
+    dash: 5,
+    weight: 78,
+    burstResistance: 3,
+  }
+  return botDesigns(stats, f?.accent, props.seed)
+})
 const outer = shallowRef<Group>()
 const inner = shallowRef<Group>()
 const rotor = shallowRef<InstanceType<typeof BeybladeRotor>>()
-const placeholder = shallowRef<InstanceType<typeof PlaceholderRotor>>()
+const procedural = shallowRef<InstanceType<typeof ProceduralRotor>>()
 
 let materials: Material[] = []
 function onReady() {
@@ -37,7 +49,7 @@ let displaced = false
 
 function rotorParts(): { parts: RotorPart[]; scale: number } {
   if (rotor.value) return { parts: rotor.value.parts(), scale: rotor.value.scale() }
-  if (placeholder.value) return { parts: placeholder.value.parts(), scale: PLACEHOLDER_SCALE }
+  if (procedural.value) return { parts: procedural.value.parts(), scale: procedural.value.scale() }
   return { parts: [], scale: 1 }
 }
 
@@ -101,18 +113,7 @@ defineExpose({ apply })
         clone
         @ready="onReady"
       />
-      <TresGroup
-        v-else-if="urls === null"
-        :scale="PLACEHOLDER_SCALE"
-        :position="[0, 0.6 * PLACEHOLDER_SCALE, 0]"
-      >
-        <PlaceholderRotor
-          ref="placeholder"
-          :spin-key="0"
-          :self-spin="false"
-          :accent="fighter?.accent ?? null"
-        />
-      </TresGroup>
+      <ProceduralRotor v-else-if="urls === null" ref="procedural" :designs="designs" />
     </TresGroup>
   </TresGroup>
 </template>

@@ -103,7 +103,7 @@ const webgl = hasWebGL()
 <template>
   <main class="arena-page home">
     <div class="stage" @click="spinKey++">
-      <ArenaStage v-if="webgl" :urls="stageUrls" :spin-key="spinKey" />
+      <ArenaStage v-if="webgl" :urls="stageUrls" :spin-key="spinKey" :parts="parts" />
       <div v-else class="stage-fallback"><BeybladeSpinner /></div>
     </div>
 

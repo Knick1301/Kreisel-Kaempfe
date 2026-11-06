@@ -9,9 +9,9 @@ import { buildArenaGeometries } from './arenaGeometry'
 /** Kampf-Stadion: Bowl mit Tornado-Ridge, Rand mit Ring-Out-Taschen, alles aus der Arena-Definition. */
 const props = defineProps<{ arena: ArenaDefinition }>()
 
-const ACCENT = '#ededef'
+const theme = props.arena.theme
 const geo = buildArenaGeometries(props.arena)
-const floorTexture = makeFloorTexture()
+const floorTexture = makeFloorTexture(theme.floor)
 const heightAt = (r: number) => bowlY(props.arena, r)
 
 onUnmounted(() => {
@@ -34,12 +34,12 @@ onUnmounted(() => {
   <BowlDecor :height-at="heightAt" />
 
   <TresMesh :geometry="geo.ridgeLine">
-    <TresMeshBasicMaterial color="#34343c" :side="DoubleSide" />
+    <TresMeshBasicMaterial :color="theme.ridgeLine" :side="DoubleSide" />
   </TresMesh>
 
   <TresMesh :geometry="geo.metal">
     <TresMeshStandardMaterial
-      color="#141418"
+      :color="theme.metal"
       :metalness="0.9"
       :roughness="0.28"
       :side="DoubleSide"
@@ -48,7 +48,9 @@ onUnmounted(() => {
 
   <TresMesh :geometry="geo.pocketFloors">
     <TresMeshStandardMaterial
-      color="#0a0a0c"
+      :color="theme.pocketFloor"
+      :emissive="theme.pocketGlow ? theme.pocketFloor : '#000000'"
+      :emissive-intensity="theme.pocketGlow ? 1.4 : 0"
       :metalness="0.5"
       :roughness="0.55"
       :side="DoubleSide"
@@ -56,6 +58,19 @@ onUnmounted(() => {
   </TresMesh>
 
   <TresMesh :geometry="geo.accents">
-    <TresMeshBasicMaterial :color="ACCENT" :side="DoubleSide" />
+    <TresMeshBasicMaterial :color="theme.accent" :side="DoubleSide" />
   </TresMesh>
+
+  <!-- Glühen aus den Lava-Taschen -->
+  <template v-if="theme.pocketGlow">
+    <TresPointLight
+      v-for="(p, i) in arena.pockets"
+      :key="i"
+      :position="[Math.cos(p) * (arena.radius + 0.45), 0.6, Math.sin(p) * (arena.radius + 0.45)]"
+      :color="theme.pocketFloor"
+      :intensity="6"
+      :distance="4"
+      :decay="2"
+    />
+  </template>
 </template>

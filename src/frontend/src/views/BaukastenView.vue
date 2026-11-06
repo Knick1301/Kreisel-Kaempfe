@@ -15,6 +15,7 @@ import {
 import { useRoute } from 'vue-router'
 import { pickActive, setActiveId } from '@/activeBeyblade'
 import { useModelUrls } from '@/composables/useModelUrls'
+import { designsFor, TIP_DESIGNS, TRACK_DESIGNS, WHEEL_DESIGNS, modelKey } from '@/game/partDesigns'
 import { hasWebGL } from '@/webgl'
 import BeybladeSpinner from '@/components/BeybladeSpinner.vue'
 import StatBar from '@/components/StatBar.vue'
@@ -242,13 +243,31 @@ const specs = computed(() => {
 
 const signed = (n: number) => (n > 0 ? `+${n}` : `−${Math.abs(n)}`)
 
+/** Explosionsansicht: Teile schweben auseinander, damit man jedes einzeln sieht. */
+const exploded = ref(false)
+
+/** Akzentfarbe des 3D-Designs als kleiner Farbpunkt an jeder Option. */
+function accentOf(kind: PartKind, p: PartDto) {
+  const key = modelKey(p.modelPath)
+  if (kind === 'fusion-wheels') return WHEEL_DESIGNS[key]?.accent ?? designsFor([p]).wheel.accent
+  if (kind === 'spin-tracks') return TRACK_DESIGNS[key]?.accent ?? '#8b8b94'
+  return TIP_DESIGNS[key]?.accent ?? '#8b8b94'
+}
+
 const webgl = hasWebGL()
 </script>
 
 <template>
   <main class="arena-page">
     <div class="stage" @click="spinKey++">
-      <ArenaStage v-if="webgl" :urls="stageUrls" :spin-key="spinKey" />
+      <ArenaStage
+        v-if="webgl"
+        :urls="stageUrls"
+        :spin-key="spinKey"
+        :parts="selectedParts"
+        procedural
+        :exploded="exploded"
+      />
       <div v-else class="stage-fallback"><BeybladeSpinner /></div>
     </div>
 
@@ -256,7 +275,19 @@ const webgl = hasWebGL()
       <section class="panel build" aria-label="Kreisel zusammenbauen">
         <header class="panel-head">
           <span class="label"><i class="dot" />Kreisel-Bau</span>
-          <span class="label">{{ selectedParts.length }}/3 Teile</span>
+          <span class="head-tools">
+            <button
+              v-if="webgl"
+              type="button"
+              class="explode"
+              :aria-pressed="exploded"
+              :class="{ active: exploded }"
+              @click="exploded = !exploded"
+            >
+              {{ exploded ? 'Zusammenbauen' : 'Explosionsansicht' }}
+            </button>
+            <span class="label">{{ selectedParts.length }}/3 Teile</span>
+          </span>
         </header>
 
         <div class="panel-body">
@@ -307,7 +338,9 @@ const webgl = hasWebGL()
                   :aria-checked="selected[slot.kind] === p.id"
                   @click="choose(slot.kind, p.id)"
                 >
-                  <span class="option-name">{{ p.name }}</span>
+                  <span class="option-name">
+                    <i class="swatch" :style="{ background: accentOf(slot.kind, p) }" />{{ p.name }}
+                  </span>
                   <span class="option-sub">{{ partLine(p) }}</span>
                   <span class="option-weight">{{ p.weight }}g</span>
                 </button>
@@ -392,6 +425,41 @@ const webgl = hasWebGL()
 <style scoped>
 .build {
   grid-column: 1;
+}
+
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.explode {
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.explode.active,
+.explode:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.swatch {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 1px;
+  box-shadow: 0 0 6px currentColor;
 }
 
 .values {

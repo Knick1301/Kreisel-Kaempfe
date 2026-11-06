@@ -33,7 +33,7 @@ export const LAUNCH_HEIGHT = 0.7
 const DT = 1 / CHOREO_HZ
 const SAMPLES_PER_MS = CHOREO_HZ / 1000
 const GRAVITY = 14
-/** Mitte-Mitte-Radius, bis zu dem normale Clashes stattfinden (bleibt innerhalb der weichen Randbegrenzung). */
+/** Mitte-Mitte-Radius, bis zu dem normale Clashes höchstens stattfinden. */
 const MAX_CLASH_R = 2.2
 const APPROACH_S = 0.65
 const RETURN_S = 0.9
@@ -182,6 +182,8 @@ export function createChoreography(report: BattleReport): Choreography {
   const rng = seededStream(report.seed ?? report.id, 1)
   const play = playRadius(arena)
   const soft = play - 0.35
+  // Treffpunkte bleiben innerhalb der weichen Randbegrenzung, sonst wäre der Kontakt nicht exakt
+  const maxClashR = Math.min(MAX_CLASH_R, soft - CONTACT_DIST / 2 - 0.05)
 
   const params: Record<Side, Params> = {
     A: fighterParams(report.fighters?.[0], rng),
@@ -201,7 +203,7 @@ export function createChoreography(report: BattleReport): Choreography {
   const theta0 = rng() * 2 * Math.PI
   const start: Record<Side, number> = { A: theta0, B: theta0 + Math.PI + range(rng, -0.4, 0.4) }
   const launchR = Math.min(3.25, play - 0.05)
-  const tornadoR = arena.ridge.r - 0.05
+  const tornadoR = Math.min(arena.ridge.r - 0.05, soft - 0.02)
   for (const s of SIDES) {
     const p = params[s]
     let theta = start[s]
@@ -260,7 +262,7 @@ export function createChoreography(report: BattleReport): Choreography {
       : clamp(
           (Math.hypot(posX('A', kc), posZ('A', kc)) + Math.hypot(posX('B', kc), posZ('B', kc))) / 2,
           0.85,
-          MAX_CLASH_R,
+          maxClashR,
         )
     const mx = rc * Math.cos(e.angle)
     const mz = rc * Math.sin(e.angle)

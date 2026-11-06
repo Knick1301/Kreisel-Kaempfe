@@ -263,10 +263,65 @@ Effekte und Kamera kommen danach in der Szene dazu:
   ruhige Version (kein Shake, kein Blitz, kein Slow-Mo, kurzer Countdown).
 - **Ohne WebGL:** Textverlauf, der im Takt der Kampfuhr mitläuft, dazu die HUD-Balken.
 
+## Arenen
+
+| ID | Name | Besonderheit |
+|---|---|---|
+| `standard` | Standard-Stadion | R = 4, Tornado-Ridge, drei Taschen (90°, 210°, 330°, ±14°) |
+| `krater` | Vulkan-Krater | R = 3,6, steiler, Reibung ×1,03, Ring-Out ×2, zwei Lava-Taschen (0°, 180°, ±22°) |
+
+Balancing im Krater (5 000 Kämpfe je Paarung):
+
+| Matchup | Vorteil-Typ gewinnt |
+|---|---|
+| Verteidigung vs Angriff | 69,5 % / 69,8 % |
+| Ausdauer vs Verteidigung | 65,0 % / 66,6 % |
+| Angriff vs Ausdauer | 65,1 % / 65,6 % |
+| Mirrors | 49,6–50,1 % |
+
+Finish-Mix im Krater: Spin-Out 46,5 %, Entscheidung 30,0 %, Ring-Out 16,1 %, Burst 7,3 %. `BattleBalanceTest`
+prüft alle Arenen.
+
+Die Arena wählt man vor dem Kampf (`POST /api/battles/bot { beybladeId, arenaId }`). Die Kampfansicht merkt
+sich die Wahl, damit „Schnelles Match“ direkt dort startet. Lobby-Kämpfe laufen im Standard-Stadion.
+
+## 3D-Teile
+
+Echte GLB-Modelle gibt es nur für das Hells-Scythe-Set. Alle Teile haben zusätzlich ein **prozedurales
+Design**, das aus Code gebaut wird:
+
+- `game/partDesigns.ts`: Designs als Daten, über den Modellnamen (`modelPath` ohne Ordner und Endung)
+  zugeordnet. Für unbekannte Teile gibt es einen Ersatz, der aus den Werten abgeleitet wird.
+- `components/three/parts/partBuilders.ts`: Geometrie aus extrudierten Shapes mit Fase und
+  Lathe-Profilen.
+  - **Fusion Wheel:** Metallring mit Kerben, Klingen in sechs Formen (Sichel, Bollwerk, Wirbel, Fang,
+    Mond, Phantom), transluzente Ebene mit Aussparungen, Leuchtkanten, Nabe, Emblem, Schrauben.
+  - **Spin Track:** Ratsche mit schrägen Zähnen und eine von sechs Bauformen (Flansch, freier Ring,
+    Doppelratsche, Turm, Sechskant mit Bolzen, Feder-Spirale).
+  - **Tip:** Gehäuse mit Leuchtband und einer von sechs Kontaktformen (flach, Nadel, Kugel, Kralle,
+    Kugellager, Kuppel).
+- `ProceduralRotor.vue`: setzt die drei Teile zusammen, Spitze unten.
+  - Bei einem Teiletausch wird nur dieses Teil neu gebaut und rastet mit einer Fall-Animation ein.
+  - Die Explosionsansicht lässt die Teile auseinanderschweben.
+  - Burst-Schnittstelle (`parts()`, `scale()`) wie bei den anderen Rotoren.
+
+Einsatz:
+
+- **Baukasten:** immer das prozedurale Modell, damit Einrasten und Explosionsansicht für jedes Teil
+  funktionieren.
+- **Home und Kampf:** das GLB-Modell, wenn alle drei Dateien existieren, sonst das prozedurale.
+- **KI-Gegner:** Sie haben keine Teile. Ihr Aussehen wird aus den Werten gewählt, in ihrer Akzentfarbe
+  und über den Kampf-Seed stabil.
+
+Ein neues Teil braucht einen Eintrag in `parts/*.json` und ein Design in `partDesigns.ts`. Seine Werte
+müssen im bisherigen Bereich bleiben, sonst ändern sich die Referenzwerte der Normalisierung
+(`TuningCatalogTest` schlägt dann an und `SIM_VERSION` muss steigen).
+
 ## Neue Arena hinzufügen
 
-1. `Arena.java`: neuen Eintrag in `ALL` (ID, Name, Reibungs- und Ring-Out-Faktor, Taschenwinkel).
-2. `src/frontend/src/game/arenas.ts`: gleiche ID in `ARENAS` mit Geometrie (Radius, Krümmung, Ridge,
-   Taschen).
-3. Die Arena-Auswahl im `BattleService` ist aktuell fest `Arena.standard()`. Dort die Wahl ergänzen.
+1. `Arena.java`: neuen Eintrag in `ALL` und `all()` (ID, Name, Reibungs- und Ring-Out-Faktor,
+   Taschenwinkel).
+2. `src/frontend/src/game/arenas.ts`: gleiche ID in `ARENAS` und `ARENA_LIST`, mit Geometrie (Radius,
+   Krümmung, Ridge, Taschen), Beschreibung und Farbschema.
+3. Balancing prüfen: `BattleBalanceTest` läuft automatisch für jede Arena aus `Arena.all()`.
 4. Da die Arena-ID pro Kampf gespeichert wird, bleiben alte Replays gültig.

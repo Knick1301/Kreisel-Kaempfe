@@ -14,17 +14,16 @@ export function makeShadowTexture() {
 }
 
 /** Verlauf der Bowl von der Mitte (hell) zum Rand (dunkel), entlang der Profil-UV. */
-export function makeFloorTexture() {
+export function makeFloorTexture(
+  stops: readonly string[] = ['#2a2a2f', '#1c1c20', '#111114', '#0b0b0d', '#060607'],
+) {
   const c = document.createElement('canvas')
   c.width = 4
   c.height = 256
   const g = c.getContext('2d')!
   const grad = g.createLinearGradient(0, 0, 0, 256)
-  grad.addColorStop(0, '#2a2a2f')
-  grad.addColorStop(0.18, '#1c1c20')
-  grad.addColorStop(0.45, '#111114')
-  grad.addColorStop(0.88, '#0b0b0d')
-  grad.addColorStop(1, '#060607')
+  const at = [0, 0.18, 0.45, 0.88, 1]
+  stops.forEach((c, i) => grad.addColorStop(at[i] ?? 1, c))
   g.fillStyle = grad
   g.fillRect(0, 0, 4, 256)
   const tex = new CanvasTexture(c)

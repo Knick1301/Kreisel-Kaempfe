@@ -22,6 +22,21 @@ export interface ArenaDefinition {
   pocketDepth: number
   /** wie tief der Taschenboden unter dem Rand liegt */
   pocketDrop: number
+  /** Kurzbeschreibung für die Arena-Wahl */
+  description: string
+  theme: ArenaTheme
+}
+
+export interface ArenaTheme {
+  /** Verlauf der Bowl von der Mitte zum Rand (5 Stopps) */
+  floor: readonly [string, string, string, string, string]
+  metal: string
+  /** Farbe der Akzentlinien an Rand und Taschen */
+  accent: string
+  pocketFloor: string
+  /** Taschenboden leuchtet (Lava) */
+  pocketGlow: boolean
+  ridgeLine: string
 }
 
 export const STANDARD_ARENA: ArenaDefinition = {
@@ -35,12 +50,47 @@ export const STANDARD_ARENA: ArenaDefinition = {
   pocketHalfWidth: (14 * Math.PI) / 180,
   pocketDepth: 0.95,
   pocketDrop: 0.45,
+  description: 'Klassische Bowl mit Tornado-Ridge und drei Taschen.',
+  theme: {
+    floor: ['#2a2a2f', '#1c1c20', '#111114', '#0b0b0d', '#060607'],
+    metal: '#141418',
+    accent: '#ededef',
+    pocketFloor: '#0a0a0c',
+    pocketGlow: false,
+    ridgeLine: '#34343c',
+  },
+}
+
+/** Kleiner, steiler Krater mit rauem Boden und zwei breiten Lava-Taschen: viele Ring-Outs. */
+export const KRATER_ARENA: ArenaDefinition = {
+  id: 'krater',
+  name: 'Vulkan-Krater',
+  radius: 3.6,
+  curvature: 0.075,
+  ridge: { r: 2.55, height: 0.09, width: 0.2 },
+  rimHeight: 0.14,
+  pockets: [0, Math.PI],
+  pocketHalfWidth: (22 * Math.PI) / 180,
+  pocketDepth: 0.9,
+  pocketDrop: 0.5,
+  description: 'Steil, rau, zwei breite Lava-Taschen – Ring-Outs doppelt so wahrscheinlich.',
+  theme: {
+    floor: ['#3a2a24', '#271a15', '#170f0c', '#0d0807', '#060404'],
+    metal: '#1b1513',
+    accent: '#ff7a3d',
+    pocketFloor: '#ff5a1f',
+    pocketGlow: true,
+    ridgeLine: '#5a2e1e',
+  },
 }
 
 /** Weitere Arenen kommen hier dazu (und in `Arena.java`). */
 export const ARENAS: Readonly<Record<string, ArenaDefinition>> = {
   [STANDARD_ARENA.id]: STANDARD_ARENA,
+  [KRATER_ARENA.id]: KRATER_ARENA,
 }
+
+export const ARENA_LIST: readonly ArenaDefinition[] = [STANDARD_ARENA, KRATER_ARENA]
 
 export function arenaById(id?: string | null): ArenaDefinition {
   return (id && ARENAS[id]) || STANDARD_ARENA

@@ -1,14 +1,30 @@
 <script setup lang="ts">
 import { TresCanvas } from '@tresjs/core'
+import type { PartDto } from '@/api'
 import ArenaScene from './ArenaScene.vue'
 
-defineProps<{ urls: string[] | null | undefined; spinKey: number }>()
+withDefaults(
+  defineProps<{
+    urls: string[] | null | undefined
+    spinKey: number
+    parts?: PartDto[]
+    procedural?: boolean
+    exploded?: boolean
+  }>(),
+  { parts: () => [], procedural: false, exploded: false },
+)
 </script>
 
 <template>
   <div class="arena-stage" @contextmenu.prevent>
     <TresCanvas alpha :clear-alpha="0" :dpr="[1, 2]">
-      <ArenaScene :urls="urls" :spin-key="spinKey" />
+      <ArenaScene
+        :urls="urls"
+        :spin-key="spinKey"
+        :parts="parts"
+        :procedural="procedural"
+        :exploded="exploded"
+      />
     </TresCanvas>
     <p class="controls-hint" aria-hidden="true">
       <span><kbd>Links</kbd> drehen</span>

@@ -7,6 +7,7 @@ import {
   type Choreography,
 } from '@/game/choreographer'
 import {
+  arenaById,
   bowlY,
   CONTACT_DIST,
   pocketAt,
@@ -15,9 +16,11 @@ import {
   wrapAngle,
 } from '@/game/arenas'
 import fixtures from './fixtures/battles.json'
+import kraterFixtures from './fixtures/battles-krater.json'
 
 const battles = fixtures as unknown as Record<string, BattleReport>
-const all = Object.values(battles)
+const krater = kraterFixtures as unknown as Record<string, BattleReport>
+const all = [...Object.values(battles), ...Object.values(krater)]
 
 function poses(c: Choreography, side: Side, step = 50) {
   const out = []
@@ -67,34 +70,37 @@ describe('Choreograf', () => {
   it('hält beide Kreisel bis zum Finish in der Bowl', () => {
     for (const report of all) {
       const c = createChoreography(report)
+      const arena = arenaById(report.arena?.id)
       for (const side of ['A', 'B'] as const) {
         const p = createPose()
         // nach dem Launch-Hüpfer liegt der Kreisel auf der Bowl
         for (let t = 500; t <= c.finishMs; t += 25) {
           c.sample(side, t, p)
           const r = Math.hypot(p.x, p.z)
-          expect(r).toBeLessThan(STANDARD_ARENA.radius - 0.6)
-          expect(Math.abs(p.y - bowlY(STANDARD_ARENA, r))).toBeLessThan(1e-3)
+          expect(r).toBeLessThan(arena.radius - 0.6)
+          expect(Math.abs(p.y - bowlY(arena, r))).toBeLessThan(1e-3)
         }
       }
     }
   })
 
-  it('schleudert beim Ring-Out in die Tasche aus der Timeline', () => {
-    const report = battles.RING_OUT!
+  it.each([
+    ['Standard-Stadion', battles.RING_OUT!],
+    ['Vulkan-Krater', krater.RING_OUT!],
+  ])('schleudert beim Ring-Out in die Tasche aus der Timeline (%s)', (_, report) => {
+    const arena = arenaById(report.arena?.id)
     const c = createChoreography(report)
-    const ring = report.timeline!.events.find((e) => e.type === 'RING_OUT')!
-    expect(ring.type).toBe('RING_OUT')
-    if (ring.type !== 'RING_OUT') return
+    const ring = report.timeline!.events.find((e) => e.type === 'RING_OUT')
+    const pocket = ring?.type === 'RING_OUT' ? ring.pocket : -2
     const p = c.sample(c.loser, c.endMs, createPose())
     const r = Math.hypot(p.x, p.z)
-    expect(r).toBeGreaterThan(STANDARD_ARENA.radius)
-    expect(r).toBeLessThan(STANDARD_ARENA.radius + STANDARD_ARENA.pocketDepth)
-    expect(pocketAt(STANDARD_ARENA, Math.atan2(p.z, p.x))).toBe(ring.pocket)
-    expect(p.y).toBeCloseTo(pocketFloorY(STANDARD_ARENA) + 0.02, 1)
+    expect(r).toBeGreaterThan(arena.radius)
+    expect(r).toBeLessThan(arena.radius + arena.pocketDepth)
+    expect(pocketAt(arena, Math.atan2(p.z, p.x))).toBe(pocket)
+    expect(p.y).toBeCloseTo(pocketFloorY(arena) + 0.02, 1)
     // Der Sieger bleibt in der Bowl
     const w = c.sample(c.winner, c.endMs, createPose())
-    expect(Math.hypot(w.x, w.z)).toBeLessThan(STANDARD_ARENA.radius)
+    expect(Math.hypot(w.x, w.z)).toBeLessThan(arena.radius)
   })
 
   it('lässt beim Burst die Teile auseinanderfliegen und auf der Bowl landen', () => {

@@ -9,7 +9,7 @@ import {
   matchupLabel,
   playbackRate,
 } from '@/game/playback'
-import { ARENAS, pocketAt, rimSegments, STANDARD_ARENA } from '@/game/arenas'
+import { ARENAS, KRATER_ARENA, pocketAt, rimSegments, STANDARD_ARENA } from '@/game/arenas'
 import fixtures from './fixtures/battles.json'
 
 const battles = fixtures as unknown as Record<string, BattleReport>
@@ -77,9 +77,11 @@ describe('Wiedergabe', () => {
 
 describe('Arenen', () => {
   it('Taschen passen zum Backend (Arena.java)', () => {
-    expect(Object.keys(ARENAS)).toEqual(['standard'])
+    expect(Object.keys(ARENAS)).toEqual(['standard', 'krater'])
     expect(STANDARD_ARENA.pockets).toEqual([Math.PI / 2, (7 * Math.PI) / 6, (11 * Math.PI) / 6])
     expect(STANDARD_ARENA.pocketHalfWidth).toBeCloseTo((14 * Math.PI) / 180, 12)
+    expect(KRATER_ARENA.pockets).toEqual([0, Math.PI])
+    expect(KRATER_ARENA.pocketHalfWidth).toBeCloseTo((22 * Math.PI) / 180, 12)
   })
 
   it('findet Taschen und lässt dazwischen den Rand stehen', () => {

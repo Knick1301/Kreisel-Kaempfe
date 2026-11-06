@@ -214,8 +214,8 @@ export function quickMatch(beybladeId: number) {
 }
 
 /** Kampf gegen einen KI-Gegner mit Zufallsname, Ergebnis und Timeline kommen vom Server. */
-export function botBattle(beybladeId: number) {
-  return request<BattleReport>('POST', '/battles/bot', { beybladeId })
+export function botBattle(beybladeId: number, arenaId?: string) {
+  return request<BattleReport>('POST', '/battles/bot', { beybladeId, arenaId })
 }
 
 /** Gespeicherter Kampf inklusive Timeline (Replay per Seed). */

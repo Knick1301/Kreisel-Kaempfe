@@ -77,7 +77,7 @@ describe('KampfView', () => {
     await vi.advanceTimersByTimeAsync(1300)
     await flushPromises()
 
-    expect(requested).toEqual({ beybladeId: 1 })
+    expect(requested).toEqual({ beybladeId: 1, arenaId: 'standard' })
     const opponent = report.fighters![1].beyblade
     expect(wrapper.text()).toContain(opponent)
     expect(wrapper.text()).toContain('KI-Gegner')

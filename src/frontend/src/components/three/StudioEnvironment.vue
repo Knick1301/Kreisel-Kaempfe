@@ -4,7 +4,6 @@ import { useTres } from '@tresjs/core'
 import { PMREMGenerator, type WebGLRenderer } from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
-
 const { scene, renderer } = useTres()
 
 const pmrem = new PMREMGenerator(renderer as WebGLRenderer)

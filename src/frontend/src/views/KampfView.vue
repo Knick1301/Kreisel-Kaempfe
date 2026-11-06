@@ -13,6 +13,7 @@ import {
 import { auth } from '@/auth'
 import { pickActive, setActiveId } from '@/activeBeyblade'
 import { hasWebGL } from '@/webgl'
+import { ARENA_LIST, arenaById } from '@/game/arenas'
 import { createChoreography, type Choreography } from '@/game/choreographer'
 import {
   displayEnergy,
@@ -52,6 +53,26 @@ const countdown = ref<string | null>(null)
 const showDialog = ref(false)
 const calm = ref(false)
 const spinKey = ref(0)
+
+// Zuletzt gewählte Arena merken, damit „Schnelles Match“ direkt dort startet
+const ARENA_KEY = 'kreisel-kaempfer.arena'
+function loadArena() {
+  try {
+    return arenaById(globalThis.localStorage?.getItem?.(ARENA_KEY)).id
+  } catch {
+    return ARENA_LIST[0]!.id
+  }
+}
+const arenaId = ref(loadArena())
+function chooseArena(id: string) {
+  arenaId.value = id
+  try {
+    globalThis.localStorage?.setItem?.(ARENA_KEY, id)
+  } catch {
+    return
+  }
+}
+const chosenArena = computed(() => arenaById(arenaId.value))
 
 const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 const webgl = hasWebGL()
@@ -201,7 +222,10 @@ async function draw() {
   phase.value = 'drawing'
   startRoulette()
   try {
-    const [r] = await Promise.all([botBattle(bey.id), wait(reducedMotion ? 200 : 1200)])
+    const [r] = await Promise.all([
+      botBattle(bey.id, arenaId.value),
+      wait(reducedMotion ? 200 : 1200),
+    ])
     if (token !== run) return
     prepare(r)
     phase.value = 'intro'
@@ -301,6 +325,7 @@ const dialogNote = computed(() =>
         v-else-if="webgl && selected"
         :urls="phase === 'loading' ? undefined : showcaseUrls"
         :spin-key="spinKey"
+        :parts="selectedParts"
       />
       <div v-else class="stage-fallback"><BeybladeSpinner /></div>
 
@@ -367,6 +392,25 @@ const dialogNote = computed(() =>
                 :value="s.value"
               />
             </div>
+            <div class="arena-pick">
+              <span class="label">Arena</span>
+              <div class="chips" role="radiogroup" aria-label="Arena wählen">
+                <button
+                  v-for="a in ARENA_LIST"
+                  :key="a.id"
+                  type="button"
+                  class="chip"
+                  role="radio"
+                  :aria-checked="a.id === arenaId"
+                  :class="{ active: a.id === arenaId }"
+                  :disabled="phase === 'drawing'"
+                  @click="chooseArena(a.id)"
+                >
+                  <i class="arena-dot" :style="{ background: a.theme.accent }" />{{ a.name }}
+                </button>
+              </div>
+              <p class="arena-desc">{{ chosenArena.description }}</p>
+            </div>
           </template>
         </div>
       </section>
@@ -418,7 +462,7 @@ const dialogNote = computed(() =>
             <span class="cta-arrow" aria-hidden="true">→</span>
           </button>
           <p class="cta-sub" :role="error ? 'alert' : undefined">
-            {{ error ?? 'Kampf gegen einen zufälligen KI-Gegner' }}
+            {{ error ?? `Zufälliger KI-Gegner · ${chosenArena.name}` }}
           </p>
         </template>
 
@@ -438,6 +482,25 @@ const dialogNote = computed(() =>
         </template>
 
         <template v-else-if="phase === 'result'">
+          <div
+            v-if="!isReplay"
+            class="next-arena"
+            role="radiogroup"
+            aria-label="Arena für den nächsten Kampf"
+          >
+            <button
+              v-for="a in ARENA_LIST"
+              :key="a.id"
+              type="button"
+              class="chip"
+              role="radio"
+              :aria-checked="a.id === arenaId"
+              :class="{ active: a.id === arenaId }"
+              @click="chooseArena(a.id)"
+            >
+              <i class="arena-dot" :style="{ background: a.theme.accent }" />{{ a.name }}
+            </button>
+          </div>
           <div class="result-actions">
             <button v-if="report?.timeline" type="button" class="btn-secondary" @click="replay">
               Replay
@@ -513,6 +576,42 @@ const dialogNote = computed(() =>
 .chip.active {
   border-color: var(--text);
   color: var(--text);
+}
+
+.arena-pick {
+  display: grid;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.arena-pick .chips {
+  margin-bottom: 0;
+}
+
+.arena-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.arena-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+
+.next-arena {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.next-arena .chip {
+  background: var(--bg);
 }
 
 .mystery .hint {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useLoop, useTres } from '@tresjs/core'
 import {
   DoubleSide,
@@ -14,15 +14,32 @@ import {
   type WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import type { PartDto } from '@/api'
 import { baseBowlY, BEY_SIZE, STANDARD_ARENA } from '@/game/arenas'
+import { designsFor } from '@/game/partDesigns'
 import BeybladeRotor from './BeybladeRotor.vue'
+import ProceduralRotor from './ProceduralRotor.vue'
 import BowlDecor from './BowlDecor.vue'
 import PlaceholderRotor from './PlaceholderRotor.vue'
 import StudioEnvironment from './StudioEnvironment.vue'
 import { makeMetallic } from './materials'
 import { makeFloorTexture, makeShadowTexture } from './textures'
 
-const props = defineProps<{ urls: string[] | null | undefined; spinKey: number }>()
+const props = withDefaults(
+  defineProps<{
+    urls: string[] | null | undefined
+    spinKey: number
+    /** Teile des Kreisels; ohne vollständige GLBs wird daraus das prozedurale Modell gebaut */
+    parts?: PartDto[]
+    /** immer das prozedurale Modell zeigen (Baukasten: Einrasten, Explosionsansicht) */
+    procedural?: boolean
+    exploded?: boolean
+  }>(),
+  { parts: () => [], procedural: false, exploded: false },
+)
+
+const designs = computed(() => (props.parts.length === 3 ? designsFor(props.parts) : null))
+const showProcedural = computed(() => !!designs.value && (props.procedural || props.urls === null))
 
 const BG = '#0a0a0b'
 const ACCENT = '#ededef'
@@ -182,8 +199,14 @@ onBeforeRender(({ delta }) => {
   </TresMesh>
 
   <TresGroup ref="spinner">
+    <ProceduralRotor
+      v-if="showProcedural && designs"
+      :designs="designs"
+      animated
+      :exploded="exploded"
+    />
     <BeybladeRotor
-      v-if="props.urls"
+      v-else-if="props.urls"
       :key="props.urls.join('|')"
       :urls="props.urls"
       :spin-key="spinKey"
