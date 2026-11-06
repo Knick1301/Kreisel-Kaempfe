@@ -34,10 +34,27 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(320px, 390px) 1fr minmax(320px, 390px);
-  grid-template-rows: 1fr auto;
+  /* minmax(0, …) statt 1fr: sonst wächst die Zeile mit dem Panel-Inhalt mit
+     und alles unterhalb wird von .arena-page (overflow: hidden) abgeschnitten */
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
   padding: 32px;
   pointer-events: none;
+}
+
+/* Panels im Overlay nie höher als der verfügbare Platz – Inhalt scrollt intern */
+.overlay > .panel {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+.overlay > .panel > .panel-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
 .overlay > * {
@@ -283,6 +300,14 @@
   .overlay > :not(.cta-wrap) {
     order: 2;
     margin: 0 16px 16px;
+  }
+
+  .overlay > .panel {
+    max-height: none;
+  }
+
+  .overlay > .panel > .panel-body {
+    overflow-y: visible;
   }
 }
 
