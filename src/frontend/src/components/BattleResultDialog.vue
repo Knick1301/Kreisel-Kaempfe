@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { ARCHETYPE_LABEL, FINISH_LABEL, type BattleReport, type Side } from '@/api'
 import { auth } from '@/auth'
 import { fighterOf, formatClock, matchupLabel, other } from '@/game/playback'
+import { launchDetail, launchVerdict } from '@/game/launch'
 import { leagueChange, leagueOf } from '@/game/league'
 import { me as meStore } from '@/stores/me'
 import LeagueBadge from './LeagueBadge.vue'
@@ -58,6 +59,15 @@ const matchup = computed(() => {
   if (!mine || !theirs) return null
   return `${ARCHETYPE_LABEL[mine.archetype]} vs ${ARCHETYPE_LABEL[theirs.archetype]} · ${matchupLabel(props.report.matchup, side.value)}`
 })
+const launches = computed(() => {
+  const mine = fighterOf(props.report, side.value)?.launch
+  const theirs = fighterOf(props.report, other(side.value))?.launch
+  if (!mine || !theirs) return null
+  return {
+    mine: `${launchVerdict(mine)} ${launchDetail(mine)}`,
+    theirs: launchVerdict(theirs),
+  }
+})
 const me = computed(() =>
   won.value
     ? { name: props.report.winner, bey: props.report.winnerBeyblade }
@@ -104,10 +114,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </h2>
         <p class="how mono">{{ FINISH_LABEL[report.finish] }} · {{ duration }}</p>
 
-        <dl v-if="hits || matchup" class="facts">
+        <dl v-if="hits || matchup || launches" class="facts">
           <div v-if="hits">
             <dt>Treffer</dt>
             <dd class="mono">Du {{ hits.mine }} · Gegner {{ hits.theirs }}</dd>
+          </div>
+          <div v-if="launches">
+            <dt>Anspinnen</dt>
+            <dd>
+              Du <span class="mono">{{ launches.mine }}</span> · Gegner {{ launches.theirs }}
+            </dd>
           </div>
           <div v-if="matchup">
             <dt>Matchup</dt>

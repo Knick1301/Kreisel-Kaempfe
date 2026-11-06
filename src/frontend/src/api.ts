@@ -137,6 +137,24 @@ export interface FighterDto {
   parts?: PartDto[]
   /** Akzentfarbe des Platzhalter-Modells, nur bei KI-Gegnern. */
   accent?: string
+  /** Ausgewerteter Start, nur bei Kämpfen mit Anspinnen (nie vor dem Kampf). */
+  launch?: LaunchResult
+}
+
+export interface LaunchResult {
+  /** 0–1: Summe der drei Zonenwerte geteilt durch drei */
+  quality: number
+  /** getroffene Zonen (0–3) */
+  hits: number
+  /** davon im Kern */
+  cores: number
+  /** Landepunkt im Abschussrahmen: so weit fliegt der Kreisel hinein */
+  landingX?: number | null
+  landingY?: number | null
+  /** alle drei Zonen im Kern (sehr selten) */
+  perfect: boolean
+  /** keine Zone getroffen */
+  missed: boolean
 }
 
 export interface MatchupDto {
@@ -148,6 +166,9 @@ export interface MatchupDto {
 export interface ArenaInfo {
   id: string
   name: string
+  /** optische Variante dieses Kampfs */
+  variant?: string
+  variants?: string[]
 }
 
 interface EventAt {
@@ -217,8 +238,65 @@ export function quickMatch(beybladeId: number) {
 }
 
 /** Kampf gegen einen KI-Gegner mit Zufallsname, Ergebnis und Timeline kommen vom Server. */
-export function botBattle(beybladeId: number, arenaId?: string) {
-  return request<BattleReport>('POST', '/battles/bot', { beybladeId, arenaId })
+export function botBattle(beybladeId: number, arenaId?: string, variantId?: string) {
+  return request<BattleReport>('POST', '/battles/bot', { beybladeId, arenaId, variantId })
+}
+
+// ---------------------------------------------------------------- Match mit Anspinnen
+
+/** Vorgaben und Regeln fürs Anspinnen. Gewertet wird nur auf dem Server, der Client zeigt sie an. */
+/**
+ * Schwungmesser: Ein Zeiger pendelt über einen Bogen, p(t) = ½ − ½·cos(2π·t/periodMs). Drei Zonen, drei Taps,
+ * jede Zone zählt einmal. Gewertet wird nur auf dem Server, der Client zeigt dieselben Werte an.
+ */
+export interface LaunchChallenge {
+  windowMs: number
+  maxTaps: number
+  periodMs: number
+  /** Mitten der drei Zonen auf dem Bogen (0 = links, 1 = rechts) */
+  zones: number[]
+  zoneHalf: number
+  coreHalf: number
+  edgeScore: number
+  perfectQuality: number
+}
+
+export type MatchStatus = 'LAUNCH' | 'DONE'
+
+export interface MatchDto {
+  id: string
+  mode: BattleMode
+  status: MatchStatus
+  yourSide: Side
+  arena: ArenaInfo
+  fighters: [FighterDto, FighterDto]
+  matchup: MatchupDto
+  launch: LaunchChallenge
+  youLaunched: boolean
+  opponentReady: boolean
+  expiresInMs: number
+  battleId?: number
+  /** Kampfbericht, sobald beide angespinnt haben */
+  report?: BattleReport
+}
+
+/** Rohe Eingabe: Zeitpunkte der Taps in ms ab Start des Zeigers auf dem eigenen Gerät. */
+export interface LaunchInput {
+  taps: number[]
+}
+
+/** Neues Match gegen einen KI-Gegner. Der Gegner steht sofort fest, dann wird angespinnt. */
+export function createBotMatch(beybladeId: number, arenaId?: string, variantId?: string) {
+  return request<MatchDto>('POST', '/matches', { beybladeId, arenaId, variantId })
+}
+
+/** Eigenen Start abgeben. Hat der Gegner schon angespinnt, kommt der Kampfbericht mit. */
+export function submitLaunch(matchId: string, input: LaunchInput) {
+  return request<MatchDto>('POST', `/matches/${encodeURIComponent(matchId)}/launch`, input)
+}
+
+export function fetchMatch(matchId: string) {
+  return get<MatchDto>(`/matches/${encodeURIComponent(matchId)}`)
 }
 
 /** Gespeicherter Kampf inklusive Timeline (Replay per Seed). */

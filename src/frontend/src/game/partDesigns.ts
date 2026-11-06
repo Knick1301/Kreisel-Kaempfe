@@ -138,8 +138,6 @@ export function modelKey(modelPath: string | null | undefined) {
   return file.replace(/\.[a-z0-9]+$/i, '')
 }
 
-const keys = <T>(record: Readonly<Record<string, T>>) => Object.keys(record)
-
 /** Ersatz-Design aus den Werten, falls ein Teil (noch) kein eigenes Design hat. */
 function wheelByStats(attack: number, defense: number): WheelDesign {
   if (attack >= 6) return WHEEL_DESIGNS.drachenzahn!
@@ -175,52 +173,129 @@ export function designsFor(parts: readonly PartDto[]): PartDesigns {
 }
 
 /**
- * KI-Gegner haben keine Teile, nur Werte. Ihr Aussehen wird passend zu den Werten gewählt, Klingen und
- * Ebene in ihrer Akzentfarbe. Rein optisch, über den Kampf-Seed stabil (Replay sieht gleich aus).
+ * Werte der Katalogteile wie in `parts/*.json` im Backend (ein Test prüft das). Damit sucht sich ein
+ * KI-Gegner echte Teile aus, die zu seinen Werten passen.
  */
+export const PART_STATS = {
+  wheels: {
+    'hells-scythe-blade': { attack: 7, defense: 1 },
+    bollwerk: { attack: 1, defense: 5 },
+    wirbel: { attack: 3, defense: 3 },
+    drachenzahn: { attack: 6, defense: 2 },
+    eisenmond: { attack: 2, defense: 4 },
+    phantom: { attack: 5, defense: 2 },
+    greif: { attack: 6, defense: 3 },
+  },
+  tracks: {
+    'hells-scythe-ratchet': { defense: 7, stamina: 3 },
+    orbit: { defense: 2, stamina: 8 },
+    kern: { defense: 5, stamina: 5 },
+    turm: { defense: 4, stamina: 7 },
+    bastion: { defense: 6, stamina: 4 },
+    feder: { defense: 3, stamina: 6 },
+    kelch: { defense: 4, stamina: 6 },
+  },
+  tips: {
+    'hells-scythe-bit': { stamina: 3, dash: 8 },
+    nadel: { stamina: 8, dash: 2 },
+    kugel: { stamina: 5, dash: 5 },
+    kralle: { stamina: 4, dash: 7 },
+    lager: { stamina: 7, dash: 3 },
+    kuppel: { stamina: 6, dash: 4 },
+    speer: { stamina: 5, dash: 6 },
+  },
+} as const
+
+type PartTable = Readonly<Record<string, Readonly<Record<string, number>>>>
+
+/** Modellnamen der drei Teile eines KI-Gegners. */
+export interface BotLook {
+  wheel: string
+  track: string
+  tip: string
+}
+
+/**
+ * Eines der drei am besten passenden Teile, per Seed gezogen. Teile aus `avoid` (die des Gegners) kommen
+ * nicht in Frage, solange es andere gibt: So sieht die KI nie aus wie der eigene Kreisel.
+ */
+function pickFit(
+  table: PartTable,
+  cost: (s: Readonly<Record<string, number>>) => number,
+  avoid: readonly string[],
+  rng: () => number,
+) {
+  const ranked = Object.keys(table).sort(
+    (a, b) => cost(table[a]!) - cost(table[b]!) || a.localeCompare(b),
+  )
+  const pool = ranked.filter((k) => !avoid.includes(k))
+  const top = (pool.length > 0 ? pool : ranked).slice(0, 3)
+  const r = rng()
+  return (r < 0.55 ? top[0] : r < 0.85 ? (top[1] ?? top[0]) : (top[2] ?? top[0]))!
+}
+
+/**
+ * KI-Gegner haben keine Teile, nur Werte. Ihr Aussehen setzt sich aus echten Teilen zusammen, die zu den
+ * Werten passen: Angriff kommt nur vom Fusion Wheel, Dash nur vom Tip, Verteidigung und Ausdauer teilen sich
+ * die Teile. Über den Seed stabil (Replay sieht gleich aus), ohne die Teile des Gegners.
+ */
+export function botLook(
+  stats: BeybladeStats,
+  seed: number,
+  avoid: readonly string[] = [],
+): BotLook {
+  const rng = mulberry32(seed >>> 0)
+  const W: PartTable = PART_STATS.wheels
+  const T: PartTable = PART_STATS.tracks
+  const P: PartTable = PART_STATS.tips
+  const wheel = pickFit(
+    W,
+    (w) => Math.abs(w.attack! - stats.attack) + 0.5 * Math.abs(w.defense! - stats.defense * 0.4),
+    avoid,
+    rng,
+  )
+  const restDefense = stats.defense - W[wheel]!.defense!
+  const track = pickFit(
+    T,
+    (t) => Math.abs(t.defense! - restDefense) + 0.6 * Math.abs(t.stamina! - stats.stamina * 0.55),
+    avoid,
+    rng,
+  )
+  const restStamina = stats.stamina - T[track]!.stamina!
+  const tip = pickFit(
+    P,
+    (p) => Math.abs(p.dash! - stats.dash) + 0.5 * Math.abs(p.stamina! - restStamina),
+    avoid,
+    rng,
+  )
+  return { wheel, track, tip }
+}
+
+/** Modellpfade für einen KI-Gegner (echte Teile, siehe `botLook`). */
+export function botModelPaths(
+  stats: BeybladeStats,
+  seed: number,
+  avoid: readonly string[] = [],
+): string[] {
+  const l = botLook(stats, seed, avoid)
+  return [`fusion-wheels/${l.wheel}.glb`, `spin-tracks/${l.track}.glb`, `tips/${l.tip}.glb`]
+}
+
+/** Prozedurale Designs für einen KI-Gegner (Fallback ohne GLB), Akzente in seiner Farbe. */
 export function botDesigns(
   stats: BeybladeStats,
   accent: string | undefined,
   seed: number,
+  avoid: readonly string[] = [],
 ): PartDesigns {
-  const rng = mulberry32(seed >>> 0)
-  const wheelBase = wheelByStats(Math.round(stats.attack), Math.round(stats.defense / 2))
-  const shapes = keys(WHEEL_DESIGNS)
-  // Etwas Abwechslung: manchmal eine andere Klingenform als die naheliegende
-  const wheel =
-    rng() < 0.35 ? WHEEL_DESIGNS[shapes[Math.floor(rng() * shapes.length)]!]! : wheelBase
+  const l = botLook(stats, seed, avoid)
+  const wheel = WHEEL_DESIGNS[l.wheel]!
   const color = accent ?? wheel.accent
   return {
     wheel: { ...wheel, accent: color, layer: shade(color, 0.35) },
-    track: {
-      ...trackByStats(Math.round(stats.defense / 2), Math.round(stats.stamina / 2)),
-      accent: color,
-    },
-    tip: { ...tipByStats(Math.round(stats.stamina / 2), stats.dash), accent: color },
+    track: { ...TRACK_DESIGNS[l.track]!, accent: color },
+    tip: { ...TIP_DESIGNS[l.tip]!, accent: color },
   }
-}
-
-function keyOf<T>(record: Readonly<Record<string, T>>, design: T) {
-  return Object.keys(record).find((k) => record[k] === design) ?? ''
-}
-
-/**
- * Modellpfade für einen KI-Gegner: echte Teile, passend zu seinen Werten, über den Seed stabil.
- * So sehen KI-Gegner genauso detailliert aus wie gebaute Kreisel.
- */
-export function botModelPaths(stats: BeybladeStats, seed: number): string[] {
-  const rng = mulberry32(seed >>> 0)
-  const wheelBase = wheelByStats(Math.round(stats.attack), Math.round(stats.defense / 2))
-  const shapes = keys(WHEEL_DESIGNS)
-  const wheel =
-    rng() < 0.35 ? WHEEL_DESIGNS[shapes[Math.floor(rng() * shapes.length)]!]! : wheelBase
-  const track = trackByStats(Math.round(stats.defense / 2), Math.round(stats.stamina / 2))
-  const tip = tipByStats(Math.round(stats.stamina / 2), stats.dash)
-  return [
-    `fusion-wheels/${keyOf(WHEEL_DESIGNS, wheel)}.glb`,
-    `spin-tracks/${keyOf(TRACK_DESIGNS, track)}.glb`,
-    `tips/${keyOf(TIP_DESIGNS, tip)}.glb`,
-  ]
 }
 
 /** Farbe abdunkeln (0 = schwarz, 1 = unverändert). */

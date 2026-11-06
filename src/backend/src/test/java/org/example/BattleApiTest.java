@@ -171,27 +171,73 @@ class BattleApiTest {
     }
 
     @Test
-    void arenaLaesstSichWaehlen() throws Exception {
+    void arenaUndVarianteLassenSichWaehlenUndBleibenImReplay() throws Exception {
         String auth = register("botfan6");
         long bey = buildBeyblade(auth);
         JsonNode battle = json.readTree(mvc.perform(post("/api/battles/bot").header("Authorization", auth)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"krater\"}"))
+                        .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"zyklon\",\"variantId\":\"sand\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString());
-        assertEquals("krater", battle.get("arena").get("id").asText());
-        assertEquals("Vulkan-Krater", battle.get("arena").get("name").asText());
+        assertEquals("zyklon", battle.get("arena").get("id").asText());
+        assertEquals("Zyklon-Kessel", battle.get("arena").get("name").asText());
+        assertEquals("sand", battle.get("arena").get("variant").asText());
+        assertEquals(2, battle.get("arena").get("variants").size());
 
         JsonNode replay = json.readTree(mvc.perform(get("/api/battles/" + battle.get("id").asLong())
                         .header("Authorization", auth))
                 .andReturn().getResponse().getContentAsString());
         assertEquals(battle.get("timeline"), replay.get("timeline"));
+        assertEquals("sand", replay.get("arena").get("variant").asText());
+
+        // ohne Variante: die Vorgabe der Arena
+        JsonNode plain = json.readTree(mvc.perform(post("/api/battles/bot").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"gletscher\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+        assertEquals("eis", plain.get("arena").get("variant").asText());
 
         mvc.perform(post("/api/battles/bot").header("Authorization", auth)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"mond\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(status().reason("Unbekannte Arena \"mond\"."));
+        mvc.perform(post("/api/battles/bot").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"oktagon\",\"variantId\":\"eis\"}"))
+                .andExpect(status().isBadRequest());
+        // ausgemusterte Arena ist nicht mehr wählbar
+        mvc.perform(post("/api/battles/bot").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"beybladeId\":" + bey + ",\"arenaId\":\"krater\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void alteKraterKaempfeLassenSichWeiterNachspielen() throws Exception {
+        String auth = register("botfan7");
+        long bey = buildBeyblade(auth);
+        // Kampf wie früher im Krater anlegen: Ergebnis aus der Simulation mit der alten Arena
+        JsonNode battle = json.readTree(mvc.perform(post("/api/battles/bot").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"beybladeId\":" + bey + "}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        BattleResult r = results.findById(battle.get("id").asLong()).orElseThrow();
+        var krater = org.example.game.Arena.find("krater").orElseThrow();
+        var outcome = new org.example.game.Battle(krater, r.getFighterA().fighter(), r.getFighterB().fighter(),
+                r.getSeed()).run();
+        r.setArena("krater");
+        r.setArenaVariant(null);
+        r.setWinnerSide(outcome.winnerSide());
+        r.setFinish(outcome.finish());
+        r.setDurationMs(outcome.durationMs());
+        results.save(r);
+
+        JsonNode replay = json.readTree(mvc.perform(get("/api/battles/" + r.getId()).header("Authorization", auth))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals("krater", replay.get("arena").get("id").asText());
+        assertEquals("vulkan", replay.get("arena").get("variant").asText());
+        assertTrue(replay.has("timeline"));
     }
 
     @Test

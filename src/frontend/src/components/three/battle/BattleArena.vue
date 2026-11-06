@@ -10,13 +10,21 @@ defineProps<{
   choreo: Choreography
   clock: BattleClock
   calm: boolean
+  /** nur der eigene Kreisel (Vorschau vor dem Kampf) */
+  solo?: boolean
 }>()
 </script>
 
 <template>
   <div class="battle-stage" @contextmenu.prevent>
     <TresCanvas alpha :clear-alpha="0" :dpr="[1, 2]">
-      <BattleScene :report="report" :choreo="choreo" :clock="clock" :calm="calm" />
+      <BattleScene
+        :report="report"
+        :choreo="choreo"
+        :clock="clock"
+        :calm="calm"
+        :solo="solo ?? false"
+      />
     </TresCanvas>
     <p class="controls-hint" aria-hidden="true">
       <span><kbd>Ziehen</kbd> umsehen</span>

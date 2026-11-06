@@ -23,3 +23,13 @@ export function seededStream(seed: number, salt: number) {
 }
 
 export const range = (rng: () => number, min: number, max: number) => min + (max - min) * rng()
+
+/** Stabiler 32-Bit-Hash eines Texts (FNV-1a), z. B. für Aussehen aus einem Namen. */
+export function hashString(text: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return h >>> 0
+}

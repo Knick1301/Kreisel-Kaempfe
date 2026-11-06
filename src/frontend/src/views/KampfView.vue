@@ -3,19 +3,26 @@ import { computed, defineAsyncComponent, markRaw, onUnmounted, ref, shallowRef, 
 import { useRoute, useRouter } from 'vue-router'
 import {
   ARCHETYPE_LABEL,
-  botBattle,
+  createBotMatch,
   fetchBattle,
   fetchBeyblades,
+  fetchMatch,
+  submitLaunch,
   type BattleReport,
   type BeybladeDto,
+  type FighterDto,
+  type LaunchInput,
+  type MatchDto,
   type Side,
 } from '@/api'
 import { auth } from '@/auth'
 import { refreshMe } from '@/stores/me'
 import { pickActive, setActiveId } from '@/activeBeyblade'
 import { hasWebGL } from '@/webgl'
-import { ARENA_LIST, arenaById } from '@/game/arenas'
+import { ARENA_LIST, arenaById, arenaVariant } from '@/game/arenas'
 import { createChoreography, type Choreography } from '@/game/choreographer'
+import { SIGNAL } from '@/game/launch'
+import { createStandbyChoreography, type StandbyChoreography } from '@/game/standby'
 import {
   displayEnergy,
   fighterOf,
@@ -32,11 +39,23 @@ import BeybladeSpinner from '@/components/BeybladeSpinner.vue'
 import StatBar from '@/components/StatBar.vue'
 import BattleLog from '@/components/battle/BattleLog.vue'
 import FighterPanel from '@/components/battle/FighterPanel.vue'
+import ArenaPicker from '@/components/battle/ArenaPicker.vue'
+import LaunchPad from '@/components/battle/LaunchPad.vue'
 
 const ArenaStage = defineAsyncComponent(() => import('@/components/three/ArenaStage.vue'))
 const BattleArena = defineAsyncComponent(() => import('@/components/three/battle/BattleArena.vue'))
 
-type Phase = 'loading' | 'select' | 'drawing' | 'intro' | 'countdown' | 'fight' | 'result' | 'error'
+type Phase =
+  | 'loading'
+  | 'select'
+  | 'drawing'
+  | 'intro'
+  | 'launch'
+  | 'resolving'
+  | 'countdown'
+  | 'fight'
+  | 'result'
+  | 'error'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,6 +67,9 @@ const selectedId = ref<number | null>(null)
 const selected = computed(() => beyblades.value.find((b) => b.id === selectedId.value) ?? null)
 const report = shallowRef<BattleReport | null>(null)
 const choreo = shallowRef<Choreography | null>(null)
+/** Laufendes Match vor dem Kampf (Anspinnen), null bei Replays */
+const match = shallowRef<MatchDto | null>(null)
+let standby: StandbyChoreography | null = null
 const mySide = ref<Side>('A')
 const rolling = ref<string | null>(null)
 const countdown = ref<string | null>(null)
@@ -55,25 +77,80 @@ const showDialog = ref(false)
 const calm = ref(false)
 const spinKey = ref(0)
 
-// Zuletzt gewählte Arena merken, damit „Schnelles Match“ direkt dort startet
+// Zuletzt gewählte Arena und je Arena die Variante merken, damit „Nochmal“ direkt dort startet
 const ARENA_KEY = 'kreisel-kaempfer.arena'
-function loadArena() {
+interface ArenaChoice {
+  arena: string
+  variants: Record<string, string>
+}
+function loadArena(): ArenaChoice {
+  const fallback: ArenaChoice = { arena: ARENA_LIST[0]!.id, variants: {} }
   try {
-    return arenaById(globalThis.localStorage?.getItem?.(ARENA_KEY)).id
+    const raw = globalThis.localStorage?.getItem?.(ARENA_KEY)
+    if (!raw) return fallback
+    // früher stand hier nur die ID, der alte Krater ist jetzt die Vulkan-Variante des Standard-Stadions
+    const parsed: ArenaChoice = raw.startsWith('{') ? JSON.parse(raw) : { arena: raw, variants: {} }
+    const arena = arenaById(parsed.arena)
+    if (arena.hidden) return { arena: 'standard', variants: { standard: 'vulkan' } }
+    return { arena: arena.id, variants: parsed.variants ?? {} }
   } catch {
-    return ARENA_LIST[0]!.id
+    return fallback
   }
 }
-const arenaId = ref(loadArena())
-function chooseArena(id: string) {
-  arenaId.value = id
+const arenaChoice = ref<ArenaChoice>(loadArena())
+const arenaId = computed(() => arenaChoice.value.arena)
+function saveArena() {
   try {
-    globalThis.localStorage?.setItem?.(ARENA_KEY, id)
+    globalThis.localStorage?.setItem?.(ARENA_KEY, JSON.stringify(arenaChoice.value))
   } catch {
     return
   }
 }
+function chooseArena(id: string) {
+  arenaChoice.value = { ...arenaChoice.value, arena: id }
+  saveArena()
+}
+function chooseVariant(id: string) {
+  const c = arenaChoice.value
+  arenaChoice.value = { ...c, variants: { ...c.variants, [c.arena]: id } }
+  saveArena()
+}
 const chosenArena = computed(() => arenaById(arenaId.value))
+const chosenVariant = computed(() =>
+  arenaVariant(chosenArena.value, arenaChoice.value.variants[arenaId.value]),
+)
+const arenaLabel = computed(() => `${chosenArena.value.name} · ${chosenVariant.value.name}`)
+const variantOf = (id: string) => arenaVariant(arenaById(id), arenaChoice.value.variants[id])
+
+// Vorschau vor dem Kampf: gewählte Arena und Look, der eigene Kreisel wartet im Launcher
+const previewKey = computed(() => `${arenaId.value}:${chosenVariant.value.id}`)
+const previewChoreo = computed(() => markRaw(createStandbyChoreography(arenaId.value)))
+const previewReport = computed<BattleReport | null>(() => {
+  const b = selected.value
+  if (!b) return null
+  const fighter: FighterDto = {
+    side: 'A',
+    username: auth.username,
+    bot: false,
+    beyblade: b.name,
+    stats: b.stats,
+    style: { attack: 1 / 3, defense: 1 / 3, stamina: 1 / 3 },
+    archetype: 'BALANCE',
+    parts: [b.fusionWheel, b.spinTrack, b.tip],
+  }
+  return {
+    id: 0,
+    winner: '',
+    loser: '',
+    winnerBeyblade: '',
+    loserBeyblade: '',
+    finish: 'DECISION',
+    rounds: 0,
+    playedAt: '',
+    arena: { id: arenaId.value, name: chosenArena.value.name, variant: chosenVariant.value.id },
+    fighters: [fighter, { ...fighter, side: 'B' }],
+  }
+})
 
 const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 const webgl = hasWebGL()
@@ -94,14 +171,19 @@ const names = computed<Record<Side, string>>(() => ({
   B: report.value?.fighters?.[1].beyblade ?? 'B',
 }))
 const animate = computed(() => webgl && !!choreo.value && (!reducedMotion || calm.value))
-const inBattle = computed(() => ['intro', 'countdown', 'fight', 'result'].includes(phase.value))
+const inBattle = computed(() =>
+  ['intro', 'launch', 'resolving', 'countdown', 'fight', 'result'].includes(phase.value),
+)
+// Beim Anspinnen schmale HUD-Panels, damit die Launcher am Rand frei bleiben
 const hudView = computed(() =>
-  phase.value === 'fight' || phase.value === 'result' ? 'hud' : 'intro',
+  ['launch', 'resolving', 'fight', 'result'].includes(phase.value) ? 'hud' : 'intro',
 )
 const finished = computed(() => phase.value === 'result')
 
 function energy(side: Side) {
-  return report.value ? displayEnergy(report.value, side, Math.max(0, time.value)) : 1
+  // Vor dem Kampf (Match ohne Timeline) volle Energie zeigen
+  if (!report.value?.timeline) return 1
+  return displayEnergy(report.value, side, Math.max(0, time.value))
 }
 
 function hitsUntil(side: Side) {
@@ -147,6 +229,7 @@ async function init() {
   playback.reset()
   report.value = null
   choreo.value = null
+  match.value = null
   showDialog.value = false
   error.value = null
   calm.value = false
@@ -157,9 +240,9 @@ async function init() {
     beyblades.value = Array.isArray(list) ? list : []
     const wanted = Number(route.query.bey)
     const pre = beyblades.value.find((b) => b.id === wanted) ?? pickActive(beyblades.value)
+    // `?bey=` wählt nur den Kreisel vor, gezogen wird erst nach der Arena-Wahl
     selectedId.value = pre?.id ?? null
     phase.value = 'select'
-    if (pre && route.query.bey) await draw()
   } catch (e) {
     fail(e)
   }
@@ -220,15 +303,16 @@ async function draw() {
   calm.value = false
   report.value = null
   choreo.value = null
+  match.value = null
   phase.value = 'drawing'
   startRoulette()
   try {
-    const [r] = await Promise.all([
-      botBattle(bey.id, arenaId.value),
+    const [m] = await Promise.all([
+      createBotMatch(bey.id, arenaId.value, chosenVariant.value.id),
       wait(reducedMotion ? 200 : 1200),
     ])
     if (token !== run) return
-    prepare(r)
+    showMatch(m)
     phase.value = 'intro'
   } catch (e) {
     if (token !== run) return
@@ -239,7 +323,37 @@ async function draw() {
   }
 }
 
+/**
+ * Vor dem Anspinnen: Kämpfer und Arena aus dem Match zeigen, die Kreisel warten im Launcher. Ein Ergebnis
+ * gibt es noch nicht, der Kampf wird erst simuliert, wenn beide angespinnt haben.
+ */
+function showMatch(m: MatchDto) {
+  match.value = m
+  mySide.value = m.yourSide
+  playback.reset()
+  report.value = {
+    id: 0,
+    winner: '',
+    loser: '',
+    winnerBeyblade: '',
+    loserBeyblade: '',
+    finish: 'DECISION',
+    rounds: 0,
+    playedAt: '',
+    mode: m.mode,
+    arena: m.arena,
+    fighters: m.fighters,
+    matchup: m.matchup,
+  }
+  standby = markRaw(createStandbyChoreography(m.arena.id))
+  choreo.value = standby
+}
+
 function begin() {
+  if (match.value) {
+    phase.value = 'launch'
+    return
+  }
   if (!report.value?.timeline || (reducedMotion && !calm.value)) {
     playback.skip()
     return
@@ -247,15 +361,58 @@ function begin() {
   void runCountdown()
 }
 
+function onCharge(charge: number) {
+  standby?.setCharge(mySide.value, charge)
+}
+
+/** Nach dem Urteil kurz stehen lassen, dann startet der Kampf direkt (das Anspinnen war der Countdown). */
+const VERDICT_MS = 900
+
+async function onLaunch(input: LaunchInput) {
+  const m = match.value
+  if (!m) return
+  const token = ++run
+  phase.value = 'resolving'
+  try {
+    const [done] = await Promise.all([awaitReport(m.id, input, token), wait(VERDICT_MS)])
+    if (token !== run || !done) return
+    match.value = null
+    standby = null
+    prepare(done)
+    if (!done.timeline || (reducedMotion && !calm.value)) {
+      playback.skip()
+      return
+    }
+    phase.value = 'fight'
+    playback.start()
+  } catch (e) {
+    if (token !== run) return
+    fail(e)
+  }
+}
+
+/**
+ * Start abgeben und auf den Kampf warten. Gegen die KI kommt der Bericht sofort zurück, gegen einen Menschen
+ * (später) fragt der Client nach, bis auch der Gegner angespinnt hat.
+ */
+async function awaitReport(id: string, input: LaunchInput, token: number) {
+  let m = await submitLaunch(id, input)
+  while (!m.report && token === run) {
+    await wait(500)
+    m = await fetchMatch(id)
+  }
+  return m.report ?? null
+}
+
 async function runCountdown() {
   const token = ++run
   showDialog.value = false
   playback.reset()
   phase.value = 'countdown'
-  const steps = calm.value || reducedMotion ? ['Los!'] : ['3', '2', '1', 'Los!']
+  const steps = calm.value || reducedMotion ? [SIGNAL] : ['3', '2', '1', SIGNAL]
   for (const step of steps) {
     countdown.value = step
-    await wait(step === 'Los!' ? 450 : 650)
+    await wait(step === SIGNAL ? 450 : 650)
     if (token !== run) return
   }
   countdown.value = null
@@ -306,6 +463,12 @@ onUnmounted(() => {
   stopRoulette()
 })
 
+const launchChallenge = computed(() => match.value?.launch ?? null)
+const introLabel = computed(() => {
+  if (match.value) return 'Anspinnen'
+  return reducedMotion && !calm.value ? 'Ergebnis ansehen' : 'Kampf starten'
+})
+
 const dialogNote = computed(() =>
   report.value && !report.value.timeline
     ? 'Für diesen Kampf gibt es keine Wiedergabe (älterer Kampf oder geänderte Simulation).'
@@ -324,6 +487,16 @@ const dialogNote = computed(() =>
         :calm="calm || reducedMotion"
       />
       <BattleLog v-else-if="report && inBattle" :report="report" :time="time" :names="names" />
+      <!-- Vorschau der gewählten Arena mit dem eigenen Kreisel im Launcher -->
+      <BattleArena
+        v-else-if="webgl && previewReport && previewChoreo && !inBattle"
+        :key="previewKey"
+        :report="previewReport"
+        :choreo="previewChoreo"
+        :clock="playback.clock"
+        :calm="true"
+        solo
+      />
       <ArenaStage
         v-else-if="webgl && selected"
         :urls="phase === 'loading' ? undefined : showcaseUrls"
@@ -331,6 +504,14 @@ const dialogNote = computed(() =>
         :parts="selectedParts"
       />
       <div v-else class="stage-fallback"><BeybladeSpinner /></div>
+
+      <LaunchPad
+        v-if="launchChallenge && (phase === 'launch' || phase === 'resolving')"
+        :challenge="launchChallenge"
+        :calm="calm || reducedMotion"
+        @charge="onCharge"
+        @launch="onLaunch"
+      />
 
       <div class="stage-overlay">
         <p v-if="phase === 'fight' || phase === 'result'" class="clock mono" aria-live="off">
@@ -395,25 +576,6 @@ const dialogNote = computed(() =>
                 :value="s.value"
               />
             </div>
-            <div class="arena-pick">
-              <span class="label">Arena</span>
-              <div class="chips" role="radiogroup" aria-label="Arena wählen">
-                <button
-                  v-for="a in ARENA_LIST"
-                  :key="a.id"
-                  type="button"
-                  class="chip"
-                  role="radio"
-                  :aria-checked="a.id === arenaId"
-                  :class="{ active: a.id === arenaId }"
-                  :disabled="phase === 'drawing'"
-                  @click="chooseArena(a.id)"
-                >
-                  <i class="arena-dot" :style="{ background: a.theme.accent }" />{{ a.name }}
-                </button>
-              </div>
-              <p class="arena-desc">{{ chosenArena.description }}</p>
-            </div>
           </template>
         </div>
       </section>
@@ -440,18 +602,14 @@ const dialogNote = computed(() =>
         :winner="winnerFlag(other(mySide))"
         :rolling="rolling"
       />
-      <section v-else class="panel theirs mystery" aria-label="Gegner">
-        <header class="panel-head">
-          <span class="label"><i class="dot" />KI-Gegner</span>
-        </header>
-        <div class="panel-body">
-          <h2 class="bey-name faint">? ? ?</h2>
-          <p class="hint">
-            Wird beim Start gezogen: gleiches Budget wie dein Kreisel, zufällige Werte und ein
-            zufälliger Name.
-          </p>
-        </div>
-      </section>
+      <ArenaPicker
+        v-else
+        class="theirs"
+        :arena-id="arenaId"
+        :variants="arenaChoice.variants"
+        @arena="chooseArena"
+        @variant="chooseVariant"
+      />
 
       <div class="cta-wrap">
         <template v-if="phase === 'select' || phase === 'drawing' || phase === 'loading'">
@@ -465,16 +623,22 @@ const dialogNote = computed(() =>
             <span class="cta-arrow" aria-hidden="true">→</span>
           </button>
           <p class="cta-sub" :role="error ? 'alert' : undefined">
-            {{ error ?? `Zufälliger KI-Gegner · ${chosenArena.name}` }}
+            {{ error ?? `Zufälliger KI-Gegner · ${arenaLabel}` }}
           </p>
         </template>
 
         <template v-else-if="phase === 'intro'">
           <button type="button" class="cta" @click="begin">
-            <span>{{ reducedMotion && !calm ? 'Ergebnis ansehen' : 'Kampf starten' }}</span>
+            <span>{{ introLabel }}</span>
             <span class="cta-arrow" aria-hidden="true">→</span>
           </button>
           <p class="cta-sub">{{ matchupText }}</p>
+        </template>
+
+        <template v-else-if="phase === 'launch' || phase === 'resolving'">
+          <p class="cta-sub launch-sub">
+            {{ phase === 'resolving' ? 'Kampf wird ausgewertet …' : arenaLabel }}
+          </p>
         </template>
 
         <template v-else-if="phase === 'countdown' || phase === 'fight'">
@@ -501,7 +665,9 @@ const dialogNote = computed(() =>
               :class="{ active: a.id === arenaId }"
               @click="chooseArena(a.id)"
             >
-              <i class="arena-dot" :style="{ background: a.theme.accent }" />{{ a.name }}
+              <i class="arena-dot" :style="{ background: variantOf(a.id).palette.accent }" />{{
+                a.name
+              }}
             </button>
           </div>
           <div class="result-actions">
@@ -582,23 +748,6 @@ const dialogNote = computed(() =>
   color: var(--text);
 }
 
-.arena-pick {
-  display: grid;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
-.arena-pick .chips {
-  margin-bottom: 0;
-}
-
-.arena-desc {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
 .arena-dot {
   display: inline-block;
   width: 7px;
@@ -616,10 +765,6 @@ const dialogNote = computed(() =>
 
 .next-arena .chip {
   background: var(--bg);
-}
-
-.mystery .hint {
-  max-width: 30ch;
 }
 
 .stage-overlay {
@@ -725,6 +870,12 @@ const dialogNote = computed(() =>
   color: var(--text-muted);
   transform: translateX(-50%);
   white-space: nowrap;
+}
+
+.launch-sub {
+  padding: 4px 10px;
+  border-radius: 3px;
+  background: var(--bg);
 }
 
 .skip {

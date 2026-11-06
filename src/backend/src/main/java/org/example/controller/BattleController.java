@@ -42,7 +42,7 @@ public class BattleController {
     @ResponseStatus(HttpStatus.CREATED)
     public BattleReportDto botMatch(@RequestAttribute(AuthInterceptor.USERNAME) String username,
                                     @RequestBody BotMatchRequest request) {
-        return battles.report(battles.botMatch(username, request.beybladeId(), request.arenaId()));
+        return battles.report(battles.botMatch(username, request.beybladeId(), request.arenaId(), request.variantId()));
     }
 
     /** Einzelner Kampf inklusive Timeline, wird per Seed neu simuliert (Replay). */

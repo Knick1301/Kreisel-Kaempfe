@@ -2,6 +2,8 @@ package org.example.entities;
 
 import jakarta.persistence.*;
 import org.example.game.BattleMode;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.example.game.FinishType;
 import org.example.game.Side;
 
@@ -25,7 +27,12 @@ public class BattleResult {
     private String winnerBeyblade;
     private String loserBeyblade;
 
+    // Enums als Text statt als H2-Enum-Typ: Sonst lehnt eine bestehende Datenbank neue Werte (z. B. RING_OUT)
+    // ab, weil ddl-auto=update die erlaubten Werte nie erweitert. Hibernate stellt bestehende
+    // Spalten beim Start selbst auf VARCHAR um.
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 20)
     private FinishType finish;
 
     /** Nur noch für Altbestand, die neue Simulation rechnet in Zeit statt Runden. */
@@ -35,7 +42,8 @@ public class BattleResult {
     // Kämpfe von vor dem Kampfsystem haben dort null (= PvP, kein Replay).
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "battle_mode")
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "battle_mode", length = 20)
     private BattleMode mode;
 
     /** 53 Bit, damit der Seed im Frontend als Zahl exakt ankommt. */
@@ -47,9 +55,15 @@ public class BattleResult {
     @Column(name = "arena_id")
     private String arena;
 
+    /** Optische Variante der Arena, {@code null} bei Altbestand (dann die Vorgabe der Arena). */
+    @Column(name = "arena_variant", length = 40)
+    private String arenaVariant;
+
     private Integer durationMs;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 20)
     private Side winnerSide;
 
     @Embedded
@@ -65,7 +79,12 @@ public class BattleResult {
             @AttributeOverride(name = "fusionWheelId", column = @Column(name = "a_fusion_wheel_id")),
             @AttributeOverride(name = "spinTrackId", column = @Column(name = "a_spin_track_id")),
             @AttributeOverride(name = "tipId", column = @Column(name = "a_tip_id")),
-            @AttributeOverride(name = "accent", column = @Column(name = "a_accent"))
+            @AttributeOverride(name = "accent", column = @Column(name = "a_accent")),
+            @AttributeOverride(name = "launchQuality", column = @Column(name = "a_launch_quality")),
+            @AttributeOverride(name = "launchHits", column = @Column(name = "a_launch_hits")),
+            @AttributeOverride(name = "launchCores", column = @Column(name = "a_launch_cores")),
+            @AttributeOverride(name = "launchLandingX", column = @Column(name = "a_launch_landing_x")),
+            @AttributeOverride(name = "launchLandingY", column = @Column(name = "a_launch_landing_y"))
     })
     private FighterSnapshot fighterA;
 
@@ -82,7 +101,12 @@ public class BattleResult {
             @AttributeOverride(name = "fusionWheelId", column = @Column(name = "b_fusion_wheel_id")),
             @AttributeOverride(name = "spinTrackId", column = @Column(name = "b_spin_track_id")),
             @AttributeOverride(name = "tipId", column = @Column(name = "b_tip_id")),
-            @AttributeOverride(name = "accent", column = @Column(name = "b_accent"))
+            @AttributeOverride(name = "accent", column = @Column(name = "b_accent")),
+            @AttributeOverride(name = "launchQuality", column = @Column(name = "b_launch_quality")),
+            @AttributeOverride(name = "launchHits", column = @Column(name = "b_launch_hits")),
+            @AttributeOverride(name = "launchCores", column = @Column(name = "b_launch_cores")),
+            @AttributeOverride(name = "launchLandingX", column = @Column(name = "b_launch_landing_x")),
+            @AttributeOverride(name = "launchLandingY", column = @Column(name = "b_launch_landing_y"))
     })
     private FighterSnapshot fighterB;
 
@@ -117,6 +141,8 @@ public class BattleResult {
     public void setSimVersion(Integer simVersion) { this.simVersion = simVersion; }
     public String getArena() { return arena; }
     public void setArena(String arena) { this.arena = arena; }
+    public String getArenaVariant() { return arenaVariant; }
+    public void setArenaVariant(String arenaVariant) { this.arenaVariant = arenaVariant; }
     public Integer getDurationMs() { return durationMs; }
     public void setDurationMs(Integer durationMs) { this.durationMs = durationMs; }
     public Side getWinnerSide() { return winnerSide; }

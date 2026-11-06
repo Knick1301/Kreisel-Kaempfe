@@ -3,6 +3,7 @@ package org.example.entities;
 import jakarta.persistence.Embeddable;
 import org.example.dtos.BeybladeStats;
 import org.example.game.Fighter;
+import org.example.game.Launch;
 
 /**
  * Stand eines Kämpfers zum Zeitpunkt des Kampfs. Kreisel können später geändert oder gelöscht werden,
@@ -24,6 +25,14 @@ public class FighterSnapshot {
     private Long spinTrackId;
     private Long tipId;
     private String accent;
+    /** Anspinnen, {@code null} bei Kämpfen ohne Anspinnen (Altbestand, Schnelles Match, Lobby) */
+    private Double launchQuality;
+    /** getroffene Zonen und davon im Kern */
+    private Integer launchHits;
+    private Integer launchCores;
+    /** Landepunkt im Abschussrahmen, {@code null} ohne Flug */
+    private Double launchLandingX;
+    private Double launchLandingY;
 
     protected FighterSnapshot() {}
 
@@ -50,6 +59,32 @@ public class FighterSnapshot {
         FighterSnapshot s = new FighterSnapshot(owner, name, stats);
         s.accent = accent;
         return s;
+    }
+
+    /** Kopie mit ausgewertetem Start. */
+    public FighterSnapshot withLaunch(Launch launch) {
+        FighterSnapshot s = new FighterSnapshot(owner, beyblade, stats());
+        s.fusionWheelId = fusionWheelId;
+        s.spinTrackId = spinTrackId;
+        s.tipId = tipId;
+        s.accent = accent;
+        if (launch != null) {
+            s.launchQuality = launch.quality();
+            s.launchHits = launch.hits();
+            s.launchCores = launch.cores();
+            s.launchLandingX = launch.landingX();
+            s.launchLandingY = launch.landingY();
+        }
+        return s;
+    }
+
+    /** Ausgewerteter Start, {@code null} ohne Anspinnen. */
+    public Launch launch() {
+        if (launchQuality == null) return null;
+        // Kämpfe aus früheren Testständen des Anspinnens haben nur die Qualität
+        int hits = launchHits != null ? launchHits : (int) Math.round(launchQuality * 3);
+        return new Launch(launchQuality, hits, launchCores == null ? 0 : launchCores, launchLandingX,
+                launchLandingY);
     }
 
     public boolean isComplete() {

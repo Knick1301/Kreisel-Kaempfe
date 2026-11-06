@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, shallowRef } from 'vue'
+import { onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useLoop, useTres } from '@tresjs/core'
 import {
   Fog,
+  Group,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeBasicMaterial,
   MOUSE,
   PlaneGeometry,
+  RingGeometry,
   TOUCH,
   Vector3,
   type BufferAttribute,
@@ -15,7 +19,7 @@ import {
   type WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import type { BattleReport } from '@/api'
+import type { BattleReport, FighterDto } from '@/api'
 import { BEY_SIZE, bowlY, pocketFloorY } from '@/game/arenas'
 import { CameraDirector } from '@/game/cameraDirector'
 import {
@@ -25,7 +29,8 @@ import {
   type FighterPose,
 } from '@/game/choreographer'
 import type { BattleClock } from '@/game/clock'
-import { seededStream } from '@/game/prng'
+import { modelKey } from '@/game/partDesigns'
+import { hashString, seededStream } from '@/game/prng'
 import StudioEnvironment from '../StudioEnvironment.vue'
 import { makeShadowTexture } from '../textures'
 import BattleBowl from './BattleBowl.vue'
@@ -38,6 +43,8 @@ const props = defineProps<{
   clock: BattleClock
   /** ruhige Version: kein Shake, kein Blitz */
   calm: boolean
+  /** nur Seite A zeigen (Vorschau vor dem Kampf) */
+  solo?: boolean
 }>()
 
 const BG = '#0a0a0b'
@@ -57,7 +64,7 @@ const flashLight = shallowRef<PointLight>()
 const poseA = createPose()
 const poseB = createPose()
 const parts = createPartPoses()
-const director = new CameraDirector(props.choreo, props.calm)
+let director = new CameraDirector(props.choreo, props.calm)
 const sparks = new SparkPool()
 const sparkRng = seededStream(props.report.seed ?? props.report.id, 7)
 
@@ -140,11 +147,87 @@ let nextClash = 0
 let lastT = -Infinity
 let flash = 0
 
+// ---------------------------------------------------------------- Aufschlag nach dem Launch
+function flatRing(inner: number, outer: number, color: string, opacity: number) {
+  const g = new RingGeometry(inner, outer, 48)
+  g.rotateX(-Math.PI / 2)
+  const m = new ThreeMesh(
+    g,
+    // ohne Tiefentest: der flache Ring würde sonst von der gewölbten Bowl verdeckt
+    new ThreeBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      depthTest: false,
+    }),
+  )
+  m.renderOrder = 3
+  return m
+}
+
+// Aufschlag am Landepunkt: Funken und ein sich ausbreitender Ring
+const impactRings = [flatRing(0.8, 1, '#ffffff', 0), flatRing(0.8, 1, '#ffffff', 0)]
+const impactGroup = new Group()
+impactGroup.add(...impactRings)
+let nextLanding = 0
+const IMPACT_MS = 650
+
+function placeImpacts(c: Choreography, t: number) {
+  const landings = c.landings ?? []
+  while (nextLanding < landings.length && landings[nextLanding]!.t <= t) {
+    const l = landings[nextLanding++]!
+    if (t - l.t < 250) sparks.spawn(l.x, l.y, l.z, l.nx, l.nz, 0.45, sparkRng)
+  }
+  impactRings.forEach((ring, i) => {
+    const l = landings[i]
+    const age = l ? t - l.t : -1
+    const mat = ring.material as ThreeBasicMaterial
+    if (!l || age < 0 || age > IMPACT_MS) {
+      mat.opacity = 0
+      return
+    }
+    const u = age / IMPACT_MS
+    ring.position.set(l.x, l.y + 0.02, l.z)
+    ring.scale.setScalar(0.15 + 0.85 * (1 - (1 - u) * (1 - u)))
+    mat.opacity = 0.7 * (1 - u)
+  })
+}
+
+onUnmounted(() => {
+  for (const m of impactRings) {
+    m.geometry.dispose()
+    ;(m.material as ThreeBasicMaterial).dispose()
+  }
+})
+
+// Nach dem Anspinnen wechselt die Wartestellung zur echten Choreografie, die Kamera fährt ohne Sprung weiter.
+watch(
+  () => props.choreo,
+  (c) => {
+    const next = new CameraDirector(c, props.calm)
+    if (camera.value && controls) next.takeOver(camera.value.position, controls.target)
+    director = next
+    nextClash = 0
+    nextLanding = 0
+    lastT = -Infinity
+  },
+)
+
+/**
+ * Aussehen eines KI-Gegners hängt nur an Name und Farbe, nicht am Kampf-Seed. So sieht er vor dem Anspinnen,
+ * im Kampf und im Replay gleich aus.
+ */
+/** Modellnamen der Teile eines Kämpfers, damit eine KI nie genauso aussieht wie ihr Gegner. */
+const partKeys = (f: FighterDto | undefined) => f?.parts?.map((p) => modelKey(p.modelPath)) ?? []
+const lookSeed = (f: FighterDto | undefined, salt: number) =>
+  hashString(`${f?.beyblade ?? ''}|${f?.accent ?? ''}`) + salt
+
 const { onBeforeRender } = useLoop()
 
 onBeforeRender(({ delta }) => {
   const cam = camera.value
-  if (!cam || !fighterA.value || !fighterB.value) return
+  if (!cam || !fighterA.value || (!props.solo && !fighterB.value)) return
   if (!controls) controls = setupControls(cam)
 
   const c = props.choreo
@@ -152,6 +235,7 @@ onBeforeRender(({ delta }) => {
   // Replay oder Zurückspulen: Effekte neu aufsetzen
   if (t < lastT - 50) {
     nextClash = 0
+    nextLanding = 0
     flash = 0
     sparks.clear()
   }
@@ -161,7 +245,9 @@ onBeforeRender(({ delta }) => {
   c.sample('B', t, poseB)
   const burst = c.sampleParts(t, parts)
   fighterA.value.apply(poseA, burst && c.loser === 'A' ? parts : null)
-  fighterB.value.apply(poseB, burst && c.loser === 'B' ? parts : null)
+  fighterB.value?.apply(poseB, burst && c.loser === 'B' ? parts : null)
+
+  placeImpacts(c, t)
 
   const fade = (pose: FighterPose) => (pose.burst ? Math.max(0, 1 - (t - c.finishMs) / 300) : 1)
   placeShadow(shadowA.value, poseA, fade(poseA))
@@ -204,25 +290,29 @@ onBeforeRender(({ delta }) => {
   <TresDirectionalLight :position="[-4, 3.5, -7]" :intensity="1.5" color="#bcc8ff" />
   <TresPointLight ref="flashLight" color="#fff1d6" :intensity="0" :distance="7" :decay="2" />
 
-  <BattleBowl :arena="arena" />
+  <BattleBowl :arena="arena" :variant="report.arena?.variant" />
 
   <TresMesh ref="shadowA" :geometry="shadowGeometries[0]" :render-order="1">
     <TresMeshBasicMaterial :map="shadowTexture" transparent :depth-write="false" />
   </TresMesh>
-  <TresMesh ref="shadowB" :geometry="shadowGeometries[1]" :render-order="1">
+  <TresMesh v-if="!solo" ref="shadowB" :geometry="shadowGeometries[1]" :render-order="1">
     <TresMeshBasicMaterial :map="shadowTexture" transparent :depth-write="false" />
   </TresMesh>
 
   <BattleFighter
     ref="fighterA"
     :fighter="report.fighters?.[0]"
-    :seed="(report.seed ?? report.id) + 1"
+    :seed="lookSeed(report.fighters?.[0], 1)"
+    :avoid="partKeys(report.fighters?.[1])"
   />
   <BattleFighter
+    v-if="!solo"
     ref="fighterB"
     :fighter="report.fighters?.[1]"
-    :seed="(report.seed ?? report.id) + 2"
+    :seed="lookSeed(report.fighters?.[1], 2)"
+    :avoid="partKeys(report.fighters?.[0])"
   />
 
   <primitive :object="sparks.object" />
+  <primitive :object="impactGroup" />
 </template>

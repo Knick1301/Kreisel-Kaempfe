@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,10 +94,29 @@ class BattleTest {
         assertEquals(arena, Arena.find("standard").orElseThrow());
         assertTrue(Arena.find("gibt-es-nicht").isEmpty());
 
+        assertEquals(List.of("klassik", "vulkan"), arena.variants());
+
+        assertEquals(List.of("standard", "oktagon", "zyklon", "gletscher"),
+                Arena.all().stream().map(Arena::id).toList());
+        Arena oktagon = Arena.find("oktagon").orElseThrow();
+        assertEquals(List.of(Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4), oktagon.pockets());
+        assertEquals(Math.toRadians(9), oktagon.pocketHalfWidth(), 1e-12);
+        assertEquals(List.of("chrom", "neon"), oktagon.variants());
+        Arena zyklon = Arena.find("zyklon").orElseThrow();
+        assertEquals(6, zyklon.pockets().size());
+        assertEquals(Math.toRadians(8), zyklon.pocketHalfWidth(), 1e-12);
+        assertEquals(List.of("sturm", "sand"), zyklon.variants());
+        Arena gletscher = Arena.find("gletscher").orElseThrow();
+        assertEquals(List.of(Math.PI / 2, 3 * Math.PI / 2), gletscher.pockets());
+        assertEquals(Math.toRadians(18), gletscher.pocketHalfWidth(), 1e-12);
+        assertEquals(List.of("eis", "aurora"), gletscher.variants());
+
+        // der alte Krater bleibt nur für Replays
         Arena krater = Arena.find("krater").orElseThrow();
         assertEquals(List.of(0.0, Math.PI), krater.pockets());
         assertEquals(Math.toRadians(22), krater.pocketHalfWidth(), 1e-12);
-        assertEquals(List.of(Arena.standard(), krater), Arena.all());
+        assertFalse(krater.selectable());
+        assertFalse(Arena.all().contains(krater));
     }
 
     private static void assertConsistent(BattleOutcome o) {

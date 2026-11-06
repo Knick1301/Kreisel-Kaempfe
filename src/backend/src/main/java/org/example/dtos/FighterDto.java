@@ -9,7 +9,9 @@ import java.util.List;
 /**
  * @param parts  Fusion Wheel, Spin Track, Tip; {@code null} bei KI-Gegnern (Platzhalter-Modell)
  * @param accent Akzentfarbe des Platzhalter-Modells, nur bei KI-Gegnern
+ * @param launch ausgewerteter Start, nur bei Kämpfen mit Anspinnen
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record FighterDto(Side side, String username, boolean bot, String beyblade, BeybladeStats stats,
-                         StyleDto style, Archetype archetype, List<PartDto> parts, String accent) {}
+                         StyleDto style, Archetype archetype, List<PartDto> parts, String accent,
+                         LaunchDto launch) {}

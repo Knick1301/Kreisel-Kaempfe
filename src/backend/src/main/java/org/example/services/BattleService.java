@@ -3,7 +3,9 @@ package org.example.services;
 import org.example.config.SystemUserSeeder;
 import org.example.dtos.ArenaDto;
 import org.example.dtos.BattleReportDto;
+import org.example.dtos.BeybladeStats;
 import org.example.dtos.FighterDto;
+import org.example.dtos.LaunchDto;
 import org.example.dtos.MatchupDto;
 import org.example.dtos.PartDto;
 import org.example.dtos.StyleDto;
@@ -18,6 +20,7 @@ import org.example.game.BattleMode;
 import org.example.game.BattleOutcome;
 import org.example.game.BattleTuning;
 import org.example.game.BotFactory;
+import org.example.game.Launch;
 import org.example.game.Side;
 import org.example.game.StyleVector;
 import org.example.repositories.BattleResultRepository;
@@ -62,30 +65,71 @@ public class BattleService {
         if (userA.getId().equals(userB.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Du kannst nicht gegen dich selbst kämpfen.");
         }
-        return simulateAndSave(BattleMode.PVP, Arena.standard(), userA, FighterSnapshot.of(userA, beybladeA),
+        return simulateAndSave(BattleMode.PVP, Arena.standard(), null, userA, FighterSnapshot.of(userA, beybladeA),
                 userB, FighterSnapshot.of(userB, beybladeB));
     }
 
     /** Kampf gegen einen KI-Gegner mit zufälligen Werten. Zählt fürs Profil, nicht für die Rangliste. */
     @Transactional
     public BattleResult botMatch(String username, Long beybladeId) {
-        return botMatch(username, beybladeId, null);
+        return botMatch(username, beybladeId, null, null);
     }
 
-    /** @param arenaId Arena-ID, {@code null} für das Standard-Stadion */
+    /** Wählbare Arena zur ID, ohne Angabe das Standard-Stadion. Unbekannte oder ausgemusterte: 400. */
+    public static Arena selectArena(String arenaId) {
+        if (arenaId == null || arenaId.isBlank()) return Arena.standard();
+        return Arena.find(arenaId).filter(Arena::selectable).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unbekannte Arena \"" + arenaId + "\"."));
+    }
+
+    /** Variante der Arena, ohne Angabe die Vorgabe. Unbekannte: 400. */
+    public static String selectVariant(Arena arena, String variantId) {
+        if (variantId == null || variantId.isBlank()) return arena.variants().getFirst();
+        if (!arena.variants().contains(variantId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unbekannte Variante \"" + variantId + "\" für " + arena.name() + ".");
+        }
+        return variantId;
+    }
+
+    /**
+     * @param arenaId   Arena-ID, {@code null} für das Standard-Stadion
+     * @param variantId optische Variante, {@code null} für die Vorgabe der Arena
+     */
     @Transactional
-    public BattleResult botMatch(String username, Long beybladeId, String arenaId) {
-        Arena arena = arenaId == null || arenaId.isBlank()
-                ? Arena.standard()
-                : Arena.find(arenaId).orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unbekannte Arena \"" + arenaId + "\"."));
+    public BattleResult botMatch(String username, Long beybladeId, String arenaId, String variantId) {
+        Arena arena = selectArena(arenaId);
+        String variant = selectVariant(arena, variantId);
         User me = user(username);
         Beyblade mine = beyblades.owned(me, beybladeId);
         User bot = users.findByUsername(SystemUserSeeder.BOT_USERNAME).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Gerade ist kein KI-Gegner verfügbar."));
         BotFactory.Bot generated = BotFactory.create(mine.getStats(), random);
-        return simulateAndSave(BattleMode.BOT, arena, me, FighterSnapshot.of(me, mine), bot,
+        return simulateAndSave(BattleMode.BOT, arena, variant, me, FighterSnapshot.of(me, mine), bot,
                 FighterSnapshot.bot(bot.getUsername(), generated.name(), generated.stats(), generated.accent()));
+    }
+
+    /** Gegner für ein Bot-Match ziehen: KI-Systemuser und Snapshot mit Zufallswerten. */
+    public FighterSnapshot drawBot(BeybladeStats playerStats) {
+        BotFactory.Bot generated = BotFactory.create(playerStats, random);
+        return FighterSnapshot.bot(botUser().getUsername(), generated.name(), generated.stats(), generated.accent());
+    }
+
+    public User botUser() {
+        return users.findByUsername(SystemUserSeeder.BOT_USERNAME).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Gerade ist kein KI-Gegner verfügbar."));
+    }
+
+    /**
+     * Kampf nach dem Anspinnen: Beide Starts sind ausgewertet, jetzt wird simuliert und gespeichert.
+     * Wird vom Match-Ablauf aufgerufen, sobald beide Seiten angespinnt haben (oder die Zeit abgelaufen ist).
+     */
+    @Transactional
+    public BattleResult resolveLaunched(BattleMode mode, Arena arena, String variant, Long userA, FighterSnapshot a,
+                                        Launch launchA, Long userB, FighterSnapshot b, Launch launchB) {
+        User ua = users.findById(userA).orElseThrow();
+        User ub = users.findById(userB).orElseThrow();
+        return simulateAndSave(mode, arena, variant, ua, a.withLaunch(launchA), ub, b.withLaunch(launchB));
     }
 
     @Transactional
@@ -106,13 +150,13 @@ public class BattleService {
         return fight(me, mine, opponent, theirs.get(random.nextInt(theirs.size())));
     }
 
-    private BattleResult simulateAndSave(BattleMode mode, Arena arena, User userA, FighterSnapshot a, User userB,
-                                         FighterSnapshot b) {
+    private BattleResult simulateAndSave(BattleMode mode, Arena arena, String variant, User userA, FighterSnapshot a,
+                                         User userB, FighterSnapshot b) {
         // Verwaltete Instanzen holen, damit Liga-Punkte und XP sicher mitgespeichert werden
         userA = users.findById(userA.getId()).orElseThrow();
         userB = users.findById(userB.getId()).orElseThrow();
         long seed = random.nextLong() & SEED_MASK;
-        BattleOutcome outcome = new Battle(arena, a.fighter(), b.fighter(), seed).run();
+        BattleOutcome outcome = new Battle(arena, a.fighter(), b.fighter(), seed, a.launch(), b.launch()).run();
 
         boolean aWon = outcome.winnerSide() == Side.A;
         BattleResult result = new BattleResult();
@@ -127,6 +171,7 @@ public class BattleService {
         result.setSeed(seed);
         result.setSimVersion(BattleTuning.SIM_VERSION);
         result.setArena(arena.id());
+        result.setArenaVariant(arena.variantOrDefault(variant));
         result.setFighterA(a);
         result.setFighterB(b);
         ranking.apply(result);
@@ -139,7 +184,8 @@ public class BattleService {
      * eine Animation nie dem gespeicherten Ergebnis.
      */
     public Optional<BattleOutcome> replay(BattleResult r) {
-        if (r.getSeed() == null || r.getSimVersion() == null || r.getSimVersion() != BattleTuning.SIM_VERSION
+        if (r.getSeed() == null || r.getSimVersion() == null
+                || !BattleTuning.REPLAYABLE_VERSIONS.contains(r.getSimVersion())
                 || r.getFighterA() == null || r.getFighterB() == null
                 || !r.getFighterA().isComplete() || !r.getFighterB().isComplete()) {
             return Optional.empty();
@@ -147,7 +193,7 @@ public class BattleService {
         Optional<Arena> arena = Arena.find(r.getArena());
         if (arena.isEmpty()) return Optional.empty();
         BattleOutcome o = new Battle(arena.get(), r.getFighterA().fighter(), r.getFighterB().fighter(),
-                r.getSeed()).run();
+                r.getSeed(), r.getFighterA().launch(), r.getFighterB().launch()).run();
         if (o.winnerSide() != r.getWinnerSide() || o.finish() != r.getFinish()
                 || !Integer.valueOf(o.durationMs()).equals(r.getDurationMs())) {
             log.warn("Replay von Kampf {} weicht vom gespeicherten Ergebnis ab", r.getId());
@@ -170,21 +216,23 @@ public class BattleService {
         }
         StyleVector styleA = StyleVector.of(r.getFighterA().stats());
         StyleVector styleB = StyleVector.of(r.getFighterB().stats());
-        ArenaDto arena = Arena.find(r.getArena()).map(ArenaDto::from).orElse(null);
+        ArenaDto arena = Arena.find(r.getArena()).map(a -> ArenaDto.from(a, r.getArenaVariant())).orElse(null);
         TimelineDto timeline = replay(r).map(o -> TimelineDto.from(o.timeline())).orElse(null);
         return BattleReportDto.full(r, arena,
-                List.of(fighterDto(Side.A, r.getFighterA(), styleA, r.getMode()),
-                        fighterDto(Side.B, r.getFighterB(), styleB, r.getMode())),
+                List.of(fighterDto(Side.A, r.getFighterA(), r.getMode()),
+                        fighterDto(Side.B, r.getFighterB(), r.getMode())),
                 MatchupDto.of(styleA, styleB), timeline);
     }
 
-    private FighterDto fighterDto(Side side, FighterSnapshot s, StyleVector style, BattleMode mode) {
+    /** Anzeige eines Kämpfers, auch schon vor dem Kampf (Match beim Anspinnen). */
+    public FighterDto fighterDto(Side side, FighterSnapshot s, BattleMode mode) {
+        StyleVector style = StyleVector.of(s.stats());
         boolean bot = mode == BattleMode.BOT && side == Side.B;
         List<PartDto> partDtos = parts.resolve(s.getFusionWheelId(), s.getSpinTrackId(), s.getTipId())
                 .map(list -> list.stream().map(PartDto::from).toList())
                 .orElse(null);
         return new FighterDto(side, s.getOwner(), bot, s.getBeyblade(), s.stats(), StyleDto.from(style),
-                style.archetype(), partDtos, s.getAccent());
+                style.archetype(), partDtos, s.getAccent(), LaunchDto.from(s.launch()));
     }
 
     @Transactional(readOnly = true)

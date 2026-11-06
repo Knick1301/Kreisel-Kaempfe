@@ -95,7 +95,7 @@ function openMode(to: string | null) {
   if (to) router?.push(to)
 }
 
-/** Schnelles Match: sofort in den Kampf gegen einen zufälligen KI-Gegner. */
+/** Schnelles Match: mit diesem Kreisel zur Kampfansicht, dort Arena wählen und KI-Gegner ziehen. */
 function startQuickMatch() {
   if (!beyblade.value) return
   setActiveId(beyblade.value.id)
@@ -224,7 +224,7 @@ const webgl = hasWebGL()
           <span class="cta-label">Schnelles Match</span>
           <span class="cta-arrow" aria-hidden="true">→</span>
         </button>
-        <p class="cta-sub">Zufälliger KI-Gegner · sofort loslegen</p>
+        <p class="cta-sub">Arena wählen · zufälliger KI-Gegner</p>
       </div>
     </div>
   </main>

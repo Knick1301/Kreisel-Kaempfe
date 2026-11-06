@@ -1,5 +1,7 @@
 package org.example.game;
 
+import java.util.Set;
+
 /**
  * Alle Balancing-Konstanten der Kampfsimulation an einer Stelle.
  *
@@ -15,7 +17,12 @@ public final class BattleTuning {
     private BattleTuning() {}
 
     /** Version der Simulation. Bei jeder Änderung an Formeln oder Konstanten erhöhen. */
-    public static final int SIM_VERSION = 1;
+    public static final int SIM_VERSION = 2;
+    /**
+     * Versionen, deren Kämpfe die aktuelle Simulation exakt nachspielt. Version 2 hat nur das Anspinnen
+     * ergänzt: Ohne Launch-Werte rechnet sie Schritt für Schritt wie Version 1.
+     */
+    public static final Set<Integer> REPLAYABLE_VERSIONS = Set.of(1, 2);
 
     // ---------------------------------------------------------------- Zeit
 
@@ -69,8 +76,20 @@ public final class BattleTuning {
 
     // ---------------------------------------------------------------- Launch & Reibung
 
-    /** Launch-Stärke: Startenergie zufällig zwischen LAUNCH_MIN und 1. */
+    /** Ohne Anspinnen (Version 1, Schnelles Match, Lobby): Startenergie zufällig zwischen LAUNCH_MIN und 1. */
     public static final double LAUNCH_MIN = 0.86;
+    /**
+     * Mit Anspinnen: Startenergie LAUNCH_SKILL_MIN + LAUNCH_SKILL_RANGE · Qualität + Zufallsanteil. Der Mittelwert
+     * typischer Starts liegt nahe am gewürfelten Mittel ohne Anspinnen, damit das Archetyp-Balancing hält.
+     */
+    public static final double LAUNCH_SKILL_MIN = 0.835;
+    public static final double LAUNCH_SKILL_RANGE = 0.045;
+    /** Kleiner Zufallsanteil der Startenergie beim Anspinnen. */
+    public static final double LAUNCH_NOISE = 0.12;
+    /** Initiative: Angriffsgewicht ±INITIATIVE · Differenz der Launch-Qualitäten … */
+    public static final double INITIATIVE = 0.25;
+    /** … bis zu diesem Zeitpunkt. */
+    public static final int INITIATIVE_MS = 8_000;
     /** Zufällige Abweichung der Reibung pro Kampf (Spitze, Untergrund), ±. */
     public static final double FRICTION_JITTER = 0.10;
     /** Grundreibung pro Sekunde (Anteil der Energie). */

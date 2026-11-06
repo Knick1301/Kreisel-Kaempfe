@@ -9,6 +9,7 @@ import {
   wrapAngle,
   type ArenaDefinition,
 } from './arenas'
+import { frameToWorld } from './launch'
 import { range, seededStream } from './prng'
 import { clamp, displayEnergy, isDeflected, other, smoothstep } from './playback'
 
@@ -29,6 +30,10 @@ export const CHOREO_HZ = 120
 export const AFTERMATH_MS = 3200
 /** Höhe, aus der die Kreisel beim Launch fallen (auch die Pose während des Countdowns). */
 export const LAUNCH_HEIGHT = 0.7
+/** Flugzeit vom Launcher zum Landepunkt der Schleuder (s). */
+export const LAUNCH_FLY_S = 0.55
+/** Höhe des Flugbogens über der direkten Linie. */
+const LAUNCH_ARC = 0.9
 
 const DT = 1 / CHOREO_HZ
 const SAMPLES_PER_MS = CHOREO_HZ / 1000
@@ -79,6 +84,18 @@ export interface ClashMark {
   final: boolean
 }
 
+/** Aufsetzen nach dem Schleuder-Flug (für Funken und Aufschlagring). */
+export interface LandingMark {
+  t: number
+  side: Side
+  x: number
+  y: number
+  z: number
+  /** Flugrichtung */
+  nx: number
+  nz: number
+}
+
 export interface Choreography {
   readonly arena: ArenaDefinition
   readonly finishMs: number
@@ -88,6 +105,8 @@ export interface Choreography {
   readonly loser: Side
   readonly clashes: readonly ClashMark[]
   readonly burst: { t: number; x: number; y: number; z: number } | null
+  /** Landepunkte der Schleuder, nach Zeit sortiert (leer ohne Schleuder) */
+  readonly landings?: readonly LandingMark[]
   sample(side: Side, tMs: number, out: FighterPose): FighterPose
   /** Schreibt die Teile-Posen (Wheel, Track, Tip) des Burst-Opfers, false vor dem Burst. */
   sampleParts(tMs: number, out: PartPose[]): boolean
@@ -167,6 +186,23 @@ function softLimit(r: number, soft: number, hard: number) {
   return soft + span * Math.tanh((r - soft) / span)
 }
 
+/** Startradius beim Launch (auch für die Wartestellung vor dem Anspinnen). */
+export function launchRadius(arena: ArenaDefinition) {
+  return Math.min(3.25, playRadius(arena) - 0.05)
+}
+
+/** Tatsächlicher Abstand zur Mitte im ersten Bild (Startradius nach der weichen Randbegrenzung). */
+export function launchRestRadius(arena: ArenaDefinition) {
+  const play = playRadius(arena)
+  return softLimit(launchRadius(arena), play - 0.35, play)
+}
+
+/**
+ * Feste Startwinkel bei Kämpfen mit Anspinnen: A links, B rechts aus Sicht der Broadcast-Kamera. Genau dort
+ * warten die Kreisel vor dem Anspinnen, so geht die Wartestellung ohne Sprung in den Kampf über.
+ */
+export const LAUNCH_THETA: Readonly<Record<Side, number>> = { A: Math.PI, B: 0 }
+
 export function createChoreography(report: BattleReport): Choreography {
   const tl = report.timeline
   if (!tl || !report.winnerSide) throw new Error('Kampf ohne Timeline')
@@ -200,10 +236,29 @@ export function createChoreography(report: BattleReport): Choreography {
   // ---------------------------------------------------------------- freie Bahn (polar)
   const r: Record<Side, Float64Array> = { A: new Float64Array(n), B: new Float64Array(n) }
   const th: Record<Side, Float64Array> = { A: new Float64Array(n), B: new Float64Array(n) }
+  // Zufallswerte immer ziehen, damit der restliche Verlauf für alte Kämpfe gleich bleibt
   const theta0 = rng() * 2 * Math.PI
-  const start: Record<Side, number> = { A: theta0, B: theta0 + Math.PI + range(rng, -0.4, 0.4) }
-  const launchR = Math.min(3.25, play - 0.05)
+  const offsetB = Math.PI + range(rng, -0.4, 0.4)
+  const launched = !!report.fighters?.some((f) => f.launch)
+  const start: Record<Side, number> = launched
+    ? { ...LAUNCH_THETA }
+    : { A: theta0, B: theta0 + offsetB }
+  const launchR = launchRadius(arena)
   const tornadoR = Math.min(arena.ridge.r - 0.05, soft - 0.02)
+  // Schleuder: Der Kreisel fliegt vom Launcher zu seinem Landepunkt und startet dort.
+  const unit = launchRestRadius(arena)
+  const landing: Record<Side, { x: number; z: number } | null> = { A: null, B: null }
+  const startR: Record<Side, number> = { A: launchR, B: launchR }
+  const fly: Record<Side, number> = { A: 0, B: 0 }
+  report.fighters?.forEach((f) => {
+    const l = f.launch
+    if (l?.landingX == null || l.landingY == null) return
+    const w = frameToWorld(f.side, { x: l.landingX, y: l.landingY }, unit)
+    landing[f.side] = w
+    start[f.side] = Math.atan2(w.z, w.x)
+    startR[f.side] = clamp(Math.hypot(w.x, w.z), 0.3, soft - 0.05)
+    fly[f.side] = LAUNCH_FLY_S
+  })
   for (const s of SIDES) {
     const p = params[s]
     let theta = start[s]
@@ -214,8 +269,13 @@ export function createChoreography(report: BattleReport): Choreography {
         p.rMean + p.rAmp * (0.7 * Math.sin(p.f1 * t + p.p1) + 0.3 * Math.sin(p.f2 * t + p.p2))
       let radius: number
       let omega = p.omega
-      if (t < 1) {
-        radius = launchR + (tornadoR - launchR) * smoothstep(t)
+      if (t < fly[s]) {
+        // noch in der Luft: die Bahn beginnt erst am Landepunkt
+        radius = startR[s]
+        omega = 0
+      } else if (t < 1) {
+        const u = (t - fly[s]) / (1 - fly[s])
+        radius = startR[s] + (tornadoR - startR[s]) * smoothstep(u)
         omega *= 1.3
       } else if (t < 3.5) {
         radius = tornadoR + 0.05 * Math.sin(2.1 * t + p.p1)
@@ -361,6 +421,7 @@ export function createChoreography(report: BattleReport): Choreography {
     A: emptyTrack(n),
     B: emptyTrack(n),
   }
+  const landingMarks: LandingMark[] = []
   for (const s of SIDES) {
     const tr = track[s]
     for (let k = 0; k < n; k++) {
@@ -374,6 +435,31 @@ export function createChoreography(report: BattleReport): Choreography {
       }
       tr.x[k] = x
       tr.z[k] = z
+    }
+    // Flug vom Launcher (Ruheposition der Wartestellung) zum Landepunkt
+    const kFly = Math.round(fly[s] * CHOREO_HZ)
+    if (landing[s] && kFly > 0) {
+      const fromX = unit * Math.cos(LAUNCH_THETA[s])
+      const fromZ = unit * Math.sin(LAUNCH_THETA[s])
+      const toX = tr.x[kFly]!
+      const toZ = tr.z[kFly]!
+      for (let k = 0; k < kFly; k++) {
+        // gleichmäßig über den Boden, der Bogen kommt aus der Höhe: wirkt wie ein Wurf
+        const u = k / kFly
+        const e = u * (1.15 - 0.15 * u)
+        tr.x[k] = fromX + (toX - fromX) * e
+        tr.z[k] = fromZ + (toZ - fromZ) * e
+      }
+      const len = Math.hypot(toX - fromX, toZ - fromZ) || 1
+      landingMarks.push({
+        t: fly[s] * 1000,
+        side: s,
+        x: toX,
+        y: bowlY(arena, Math.hypot(toX, toZ)),
+        z: toZ,
+        nx: (toX - fromX) / len,
+        nz: (toZ - fromZ) / len,
+      })
     }
   }
 
@@ -494,8 +580,12 @@ export function createChoreography(report: BattleReport): Choreography {
       if (!flying) {
         const rad = Math.hypot(tr.x[k]!, tr.z[k]!)
         let hop = 0
-        if (t < 0.22) hop = LAUNCH_HEIGHT * (1 - (t / 0.22) ** 2)
-        else if (t < 0.42) hop = 0.07 * Math.sin((Math.PI * (t - 0.22)) / 0.2)
+        const land = fly[s] || 0.22
+        if (t < land) {
+          const u = t / land
+          // aus dem Launcher fallen, mit Schleuder in einem flachen Bogen
+          hop = LAUNCH_HEIGHT * (1 - u * u) + (fly[s] ? LAUNCH_ARC * 4 * u * (1 - u) : 0)
+        } else if (t < land + 0.2) hop = 0.07 * Math.sin((Math.PI * (t - land)) / 0.2)
         tr.y[k] = bowlY(arena, rad) + hop
       }
 
@@ -577,6 +667,7 @@ export function createChoreography(report: BattleReport): Choreography {
     loser,
     clashes: clashMarks,
     burst,
+    landings: landingMarks.sort((a, b) => a.t - b.t),
     sample(side, tMs, out) {
       const tr = track[side]
       if (tMs < 0) {

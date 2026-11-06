@@ -9,7 +9,21 @@ import {
   matchupLabel,
   playbackRate,
 } from '@/game/playback'
-import { ARENAS, KRATER_ARENA, pocketAt, rimSegments, STANDARD_ARENA } from '@/game/arenas'
+import {
+  ARENA_LIST,
+  ARENAS,
+  arenaTraits,
+  arenaVariant,
+  bowlSlope,
+  bowlY,
+  GLETSCHER_ARENA,
+  KRATER_ARENA,
+  OKTAGON_ARENA,
+  pocketAt,
+  rimSegments,
+  STANDARD_ARENA,
+  ZYKLON_ARENA,
+} from '@/game/arenas'
 import fixtures from './fixtures/battles.json'
 
 const battles = fixtures as unknown as Record<string, BattleReport>
@@ -76,12 +90,62 @@ describe('Wiedergabe', () => {
 })
 
 describe('Arenen', () => {
-  it('Taschen passen zum Backend (Arena.java)', () => {
-    expect(Object.keys(ARENAS)).toEqual(['standard', 'krater'])
+  const deg = (d: number) => (d * Math.PI) / 180
+  const variants = (id: string) => ARENAS[id]!.variants.map((v) => v.id)
+
+  it('Taschen und Varianten passen zum Backend (Arena.java)', () => {
+    expect(ARENA_LIST.map((a) => a.id)).toEqual(['standard', 'oktagon', 'zyklon', 'gletscher'])
     expect(STANDARD_ARENA.pockets).toEqual([Math.PI / 2, (7 * Math.PI) / 6, (11 * Math.PI) / 6])
-    expect(STANDARD_ARENA.pocketHalfWidth).toBeCloseTo((14 * Math.PI) / 180, 12)
+    expect(STANDARD_ARENA.pocketHalfWidth).toBeCloseTo(deg(14), 12)
+    expect(variants('standard')).toEqual(['klassik', 'vulkan'])
+    expect(OKTAGON_ARENA.pockets).toEqual([
+      Math.PI / 4,
+      (3 * Math.PI) / 4,
+      (5 * Math.PI) / 4,
+      (7 * Math.PI) / 4,
+    ])
+    expect(OKTAGON_ARENA.pocketHalfWidth).toBeCloseTo(deg(9), 12)
+    expect(variants('oktagon')).toEqual(['chrom', 'neon'])
+    ZYKLON_ARENA.pockets.forEach((p, i) => expect(p).toBeCloseTo(deg(30 + 60 * i), 12))
+    expect(ZYKLON_ARENA.pocketHalfWidth).toBeCloseTo(deg(8), 12)
+    expect(variants('zyklon')).toEqual(['sturm', 'sand'])
+    expect(GLETSCHER_ARENA.pockets).toEqual([Math.PI / 2, (3 * Math.PI) / 2])
+    expect(GLETSCHER_ARENA.pocketHalfWidth).toBeCloseTo(deg(18), 12)
+    expect(variants('gletscher')).toEqual(['eis', 'aurora'])
+    // der alte Krater bleibt nur für Replays
+    expect(KRATER_ARENA.hidden).toBe(true)
     expect(KRATER_ARENA.pockets).toEqual([0, Math.PI])
-    expect(KRATER_ARENA.pocketHalfWidth).toBeCloseTo((22 * Math.PI) / 180, 12)
+    expect(KRATER_ARENA.pocketHalfWidth).toBeCloseTo(deg(22), 12)
+    expect(ARENA_LIST).not.toContain(KRATER_ARENA)
+  })
+
+  it('Spielwerte wie in Arena.java und als Stufen fürs Panel', () => {
+    expect(OKTAGON_ARENA.play).toEqual({ friction: 0.98, ringOut: 0.75, clash: 1.15, impact: 0.95 })
+    expect(ZYKLON_ARENA.play).toEqual({ friction: 1, ringOut: 1.35, clash: 0.92, impact: 1.04 })
+    expect(GLETSCHER_ARENA.play).toEqual({ friction: 0.94, ringOut: 1.5, clash: 0.9, impact: 0.96 })
+    const level = (a: typeof STANDARD_ARENA, label: string) =>
+      arenaTraits(a).find((t) => t.label === label)!
+    expect(arenaTraits(STANDARD_ARENA).every((t) => t.level === 3 && t.percent === 0)).toBe(true)
+    expect(level(OKTAGON_ARENA, 'Clashes')).toEqual({ label: 'Clashes', level: 5, percent: 15 })
+    expect(level(OKTAGON_ARENA, 'Ring-Outs').level).toBeLessThan(3)
+    expect(level(ZYKLON_ARENA, 'Ring-Outs').level).toBeGreaterThan(3)
+    expect(level(GLETSCHER_ARENA, 'Reibung')).toEqual({ label: 'Reibung', level: 1, percent: -6 })
+  })
+
+  it('unbekannte Variante fällt auf die Vorgabe zurück', () => {
+    expect(arenaVariant(ZYKLON_ARENA, 'sand').id).toBe('sand')
+    expect(arenaVariant(ZYKLON_ARENA, 'gibt-es-nicht').id).toBe('sturm')
+    expect(arenaVariant(GLETSCHER_ARENA, null).id).toBe('eis')
+  })
+
+  it('Kuppel im Zyklon: Mitte erhöht, Steigung passt zur Höhe', () => {
+    expect(bowlY(ZYKLON_ARENA, 0)).toBeGreaterThan(bowlY(ZYKLON_ARENA, 1))
+    for (const a of ARENA_LIST) {
+      for (const r of [0.2, 0.8, 1.5, 2.6, 3.4]) {
+        const numeric = (bowlY(a, r + 1e-4) - bowlY(a, r - 1e-4)) / 2e-4
+        expect(bowlSlope(a, r)).toBeCloseTo(numeric, 3)
+      }
+    }
   })
 
   it('findet Taschen und lässt dazwischen den Rand stehen', () => {

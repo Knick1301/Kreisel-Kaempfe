@@ -12,7 +12,12 @@ import { makeMetallic } from '../materials'
 import type { RotorPart } from '../rotorParts'
 
 /** Ein Kämpfer in der Arena: GLB-Modell (auch für KI-Gegner), Fallback das prozedurale Modell. */
-const props = defineProps<{ fighter: FighterDto | undefined; seed: number }>()
+const props = defineProps<{
+  fighter: FighterDto | undefined
+  seed: number
+  /** Modellnamen der Teile des Gegners: Eine KI nimmt diese nicht */
+  avoid?: readonly string[]
+}>()
 
 const BOT_STATS = {
   attack: 4,
@@ -27,7 +32,7 @@ const BOT_STATS = {
 const modelParts = computed<PartDto[]>(() => {
   const f = props.fighter
   if (f?.parts?.length === 3) return f.parts
-  return botModelPaths(f?.stats ?? BOT_STATS, props.seed).map(
+  return botModelPaths(f?.stats ?? BOT_STATS, props.seed, props.avoid).map(
     (modelPath) => ({ modelPath }) as PartDto,
   )
 })
@@ -35,7 +40,7 @@ const urls = useModelUrls(() => modelParts.value)
 const designs = computed(() => {
   const f = props.fighter
   if (f?.parts?.length === 3) return designsFor(f.parts)
-  return botDesigns(f?.stats ?? BOT_STATS, f?.accent, props.seed)
+  return botDesigns(f?.stats ?? BOT_STATS, f?.accent, props.seed, props.avoid)
 })
 const outer = shallowRef<Group>()
 const inner = shallowRef<Group>()
