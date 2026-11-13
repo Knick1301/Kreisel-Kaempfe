@@ -50,6 +50,18 @@ const router = createRouter({
       meta: { title: 'Replay' },
     },
     {
+      path: '/turnier',
+      name: 'turnier',
+      component: () => import('@/views/TurnierView.vue'),
+      meta: { title: 'Solo-Cup' },
+    },
+    {
+      path: '/arena',
+      name: 'arena',
+      component: () => import('@/views/ArenaModeView.vue'),
+      meta: { title: 'Arena-Modus' },
+    },
+    {
       path: '/profil',
       name: 'profil',
       component: () => import('@/views/ProfilView.vue'),

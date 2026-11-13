@@ -1,11 +1,9 @@
 package org.example.controller;
 
 import org.example.config.AuthInterceptor;
-import org.example.dtos.BattleReportDto;
 import org.example.dtos.LobbyDto;
 import org.example.dtos.LobbyRequest;
 import org.example.game.Lobby;
-import org.example.services.BattleService;
 import org.example.services.LobbyService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -25,11 +23,9 @@ import java.util.List;
 public class LobbyController {
 
     private final LobbyService lobbies;
-    private final BattleService battles;
 
-    public LobbyController(LobbyService lobbies, BattleService battles) {
+    public LobbyController(LobbyService lobbies) {
         this.lobbies = lobbies;
-        this.battles = battles;
     }
 
     @GetMapping
@@ -41,7 +37,8 @@ public class LobbyController {
     @ResponseStatus(HttpStatus.CREATED)
     public LobbyDto create(@RequestAttribute(AuthInterceptor.USERNAME) String username,
                            @RequestBody LobbyRequest request) {
-        return toDto(lobbies.create(request.name(), username, request.beybladeId()));
+        return toDto(lobbies.create(request.name(), username, request.beybladeId(),
+                org.example.game.FightMode.parse(request.mode())));
     }
 
     @GetMapping("/{id}")
@@ -55,10 +52,11 @@ public class LobbyController {
         return toDto(lobbies.join(id, username, request.beybladeId()));
     }
 
+    /** Startet den Kampf: Die Lobby trägt danach die Match-ID, beide wechseln in den Kampf. */
     @PostMapping("/{id}/start")
-    public BattleReportDto start(@RequestAttribute(AuthInterceptor.USERNAME) String username,
-                                 @PathVariable String id) {
-        return BattleReportDto.from(lobbies.start(id, username));
+    public LobbyDto start(@RequestAttribute(AuthInterceptor.USERNAME) String username,
+                          @PathVariable String id) {
+        return toDto(lobbies.start(id, username));
     }
 
     @DeleteMapping("/{id}")
@@ -68,9 +66,6 @@ public class LobbyController {
     }
 
     private LobbyDto toDto(Lobby lobby) {
-        BattleReportDto result = lobby.getBattleResultId() == null
-                ? null
-                : BattleReportDto.from(battles.get(lobby.getBattleResultId()));
-        return LobbyDto.from(lobby, result);
+        return LobbyDto.from(lobby);
     }
 }

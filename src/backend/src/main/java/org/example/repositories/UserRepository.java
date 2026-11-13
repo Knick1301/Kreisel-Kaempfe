@@ -9,6 +9,10 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
 
+    Optional<User> findByUsernameIgnoreCase(String username);
+
     /** Spieler, die schon mindestens einen gewerteten Kampf hatten. */
     List<User> findByRatingIsNotNull();
+
+    List<User> findByArenaRatingIsNotNull();
 }

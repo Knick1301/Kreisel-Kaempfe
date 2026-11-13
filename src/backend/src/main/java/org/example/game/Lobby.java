@@ -12,9 +12,16 @@ public class Lobby {
     private String guest;
     private Long guestBeybladeId;
     private LobbyStatus status = LobbyStatus.OPEN;
-    private Long battleResultId;
+    /** PvP-Match, sobald der Host gestartet hat */
+    private String matchId;
+    private final FightMode mode;
 
     public Lobby(String id, String name, String host, Long hostBeybladeId) {
+        this(id, name, host, hostBeybladeId, FightMode.CLASSIC);
+    }
+
+    public Lobby(String id, String name, String host, Long hostBeybladeId, FightMode mode) {
+        this.mode = mode;
         this.id = id;
         this.name = name;
         this.host = host;
@@ -33,8 +40,8 @@ public class Lobby {
         this.status = LobbyStatus.OPEN;
     }
 
-    public void finish(Long battleResultId) {
-        this.battleResultId = battleResultId;
+    public void start(String matchId) {
+        this.matchId = matchId;
         this.status = LobbyStatus.FINISHED;
     }
 
@@ -45,6 +52,8 @@ public class Lobby {
     public String getGuest() { return guest; }
     public Long getGuestBeybladeId() { return guestBeybladeId; }
     public LobbyStatus getStatus() { return status; }
-    public Long getBattleResultId() { return battleResultId; }
+    public String getMatchId() { return matchId; }
+    /** CLASSIC: {@code matchId} ist ein Match, ARENA: ein Arena-Raum */
+    public FightMode getMode() { return mode; }
     public Instant getCreatedAt() { return createdAt; }
 }

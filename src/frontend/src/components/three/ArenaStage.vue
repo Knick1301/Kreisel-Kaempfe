@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { cappedDpr } from '@/components/three/dpr'
 import { TresCanvas } from '@tresjs/core'
 import type { PartDto } from '@/api'
 import ArenaScene from './ArenaScene.vue'
@@ -13,11 +14,13 @@ withDefaults(
   }>(),
   { parts: () => [], procedural: false, exploded: false },
 )
+
+const dpr = cappedDpr()
 </script>
 
 <template>
   <div class="arena-stage" @contextmenu.prevent>
-    <TresCanvas alpha :clear-alpha="0" :dpr="[1, 1.5]">
+    <TresCanvas alpha :clear-alpha="0" :dpr="dpr">
       <ArenaScene
         :urls="urls"
         :spin-key="spinKey"

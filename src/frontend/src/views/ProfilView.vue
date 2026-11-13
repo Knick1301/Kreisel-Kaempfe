@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { FINISH_LABEL, fetchBattles, logout, type BattleReport } from '@/api'
 import { clearMe, me as meStore, refreshMe } from '@/stores/me'
 import LeagueBadge from '@/components/LeagueBadge.vue'
+import FriendsPanel from '@/components/FriendsPanel.vue'
 import { auth, clearSession, initials } from '@/auth'
 import { formatClock } from '@/game/playback'
 import { lp } from '@/game/league'
@@ -12,6 +13,7 @@ const router = useRouter()
 const me = auth.username
 const stats = computed(() => meStore.stats)
 const rank = computed(() => meStore.rank)
+const arenaRank = computed(() => stats.value?.arenaRanking ?? null)
 const xpProgress = computed(() => {
   const r = rank.value
   return r
@@ -67,6 +69,10 @@ async function signOut() {
         <div>
           <dt class="label">Rang</dt>
           <dd class="mono">{{ stats?.rank ? `#${stats.rank}` : '–' }}</dd>
+        </div>
+        <div v-if="stats?.cupsWon">
+          <dt class="label">Cups</dt>
+          <dd class="mono">{{ stats.cupsWon }}</dd>
         </div>
         <div>
           <dt class="label">Gegen KI</dt>
@@ -146,6 +152,34 @@ async function signOut() {
             <p v-else class="hint">Lade Liga …</p>
           </div>
         </section>
+
+        <section class="panel" aria-label="Arena-Rang">
+          <header class="panel-head">
+            <span class="label"><i class="dot" />Arena-Rang (WASD)</span>
+            <span v-if="arenaRank" class="label">{{ lp(arenaRank.rating) }} LP</span>
+          </header>
+          <div class="panel-body league">
+            <template v-if="arenaRank">
+              <span class="league-title">
+                <LeagueBadge :tier="arenaRank.tier" :division="arenaRank.division" :size="44" />
+                <strong>{{ arenaRank.league }}</strong>
+              </span>
+              <div class="bar"><span :style="{ width: `${arenaRank.progress}%` }" /></div>
+              <span class="sub">
+                {{ stats?.arenaWins ?? 0 }} Siege · {{ stats?.arenaLosses ?? 0 }} Niederlagen
+                <template v-if="stats?.arenaRank"> · Platz #{{ stats.arenaRank }}</template>
+              </span>
+            </template>
+            <div v-else class="hint">
+              <p>Noch kein Arena-Kampf.</p>
+              <RouterLink to="/arena" class="btn-secondary"
+                >Selbst steuern <span>→</span></RouterLink
+              >
+            </div>
+          </div>
+        </section>
+
+        <FriendsPanel />
 
         <section class="panel" aria-label="Konto">
           <header class="panel-head">

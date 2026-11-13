@@ -62,6 +62,7 @@ function matchOf(report: BattleReport, done: boolean): MatchDto {
   }
   return {
     id: 'm1',
+    version: 0,
     mode: 'BOT',
     status: done ? 'DONE' : 'LAUNCH',
     yourSide: 'A',

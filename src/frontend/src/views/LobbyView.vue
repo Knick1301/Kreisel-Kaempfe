@@ -2,8 +2,11 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
+  cancelMatchmaking,
   createLobby,
   fetchBeyblades,
+  fetchMatchmaking,
+  joinMatchmaking,
   fetchLobbies,
   fetchLobby,
   joinLobby,
@@ -11,6 +14,8 @@ import {
   startLobby,
   type BeybladeDto,
   type LobbyDto,
+  type FightMode,
+  type MatchmakingDto,
 } from '@/api'
 import { auth } from '@/auth'
 import { pickActive } from '@/activeBeyblade'
@@ -74,22 +79,94 @@ onMounted(async () => {
 })
 onUnmounted(() => clearInterval(timer))
 
-/** Sobald der Kampf feststeht, sehen beide Spieler ihn in der Arena (Replay per Seed). */
-function watchFight(id: number) {
-  router.push({ name: 'kampf-replay', params: { id: String(id) } })
+/** Kampfart für Spielersuche und neue Lobbys */
+const mode = ref<FightMode>('CLASSIC')
+
+/**
+ * Sobald der Host startet, wechseln beide Spieler in den Kampf: klassisch (anspinnen, Ult selbst auslösen)
+ * oder im Arena-Modus (Echtzeit-Steuerung).
+ */
+function enterMatch(matchId: string, kind: FightMode | undefined) {
+  if (kind === 'ARENA') router.push({ name: 'arena', query: { room: matchId } })
+  else router.push({ name: 'kampf', query: { match: matchId } })
 }
 
 watch(
-  () => current.value?.result,
-  (r) => {
-    if (r) watchFight(r.id)
+  () => current.value?.matchId,
+  (id) => {
+    if (id) enterMatch(id, current.value?.mode)
   },
 )
+
+// ---------------------------------------------------------------- Spielersuche
+
+/** Ab dieser Wartezeit wird zusätzlich ein Kampf gegen die KI angeboten */
+const OFFER_BOT_MS = 60_000
+const SEARCH_POLL_MS = 1000
+const search = ref<MatchmakingDto | null>(null)
+let searchTimer: ReturnType<typeof setInterval> | undefined
+
+const waitedText = computed(() => {
+  const s = Math.floor((search.value?.waitedMs ?? 0) / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+})
+
+function stopSearchPolling() {
+  clearInterval(searchTimer)
+  searchTimer = undefined
+}
+
+function onSearchUpdate(m: MatchmakingDto) {
+  search.value = m
+  if (m.state === 'FOUND' && m.matchId) {
+    stopSearchPolling()
+    enterMatch(m.matchId, m.mode)
+  }
+}
+
+const startSearch = () =>
+  run(async () => {
+    if (beybladeId.value == null) throw new Error('Bitte zuerst einen Kreisel bauen.')
+    onSearchUpdate(await joinMatchmaking(beybladeId.value, mode.value))
+    if (search.value?.state !== 'WAITING') return
+    stopSearchPolling()
+    searchTimer = setInterval(async () => {
+      try {
+        onSearchUpdate(await fetchMatchmaking())
+      } catch (e) {
+        stopSearchPolling()
+        search.value = null
+        error.value = e instanceof Error ? e.message : String(e)
+      }
+    }, SEARCH_POLL_MS)
+  })
+
+const stopSearch = () =>
+  run(async () => {
+    stopSearchPolling()
+    search.value = null
+    await cancelMatchmaking()
+  })
+
+function playBot() {
+  void stopSearch()
+  if (mode.value === 'ARENA') router.push({ name: 'arena' })
+  else
+    router.push({ name: 'kampf', query: beybladeId.value ? { bey: String(beybladeId.value) } : {} })
+}
+
+onUnmounted(() => {
+  // Wer die Seite verlässt, sucht nicht weiter
+  if (searchTimer) {
+    stopSearchPolling()
+    void cancelMatchmaking().catch(() => undefined)
+  }
+})
 
 const create = () =>
   run(async () => {
     if (beybladeId.value == null) throw new Error('Bitte zuerst einen Kreisel bauen.')
-    current.value = await createLobby(lobbyName.value, beybladeId.value)
+    current.value = await createLobby(lobbyName.value, beybladeId.value, mode.value)
   })
 
 const join = (id: string) =>
@@ -101,8 +178,8 @@ const join = (id: string) =>
 
 const start = () =>
   run(async () => {
-    const result = await startLobby(current.value!.id)
-    watchFight(result.id)
+    current.value = await startLobby(current.value!.id)
+    if (current.value.matchId) enterMatch(current.value.matchId, current.value.mode)
   })
 
 const leave = () =>
@@ -132,9 +209,31 @@ const statusText = computed(() => {
           <span class="label"><i class="dot" />Freundschaftsmatch</span>
           <h1>Lobby</h1>
         </div>
+        <div class="mode-switch" role="radiogroup" aria-label="Kampfart">
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="mode === 'CLASSIC'"
+            :class="{ active: mode === 'CLASSIC' }"
+            :disabled="!!current || !!search"
+            @click="mode = 'CLASSIC'"
+          >
+            Klassisch
+          </button>
+          <button
+            type="button"
+            role="radio"
+            :aria-checked="mode === 'ARENA'"
+            :class="{ active: mode === 'ARENA' }"
+            :disabled="!!current || !!search"
+            @click="mode = 'ARENA'"
+          >
+            Arena (Echtzeit)
+          </button>
+        </div>
         <label class="pick">
           <span class="label">Dein Kreisel</span>
-          <select v-model="beybladeId" :disabled="!!current">
+          <select v-model="beybladeId" :disabled="!!current || !!search">
             <option v-for="b in beyblades" :key="b.id" :value="b.id">{{ b.name }}</option>
           </select>
         </label>
@@ -145,7 +244,10 @@ const statusText = computed(() => {
 
       <section v-if="current" class="panel room" aria-label="Deine Lobby">
         <header class="panel-head">
-          <span class="label"><i class="dot" />{{ current.name }}</span>
+          <span class="label"
+            ><i class="dot" />{{ current.name }}
+            <template v-if="current.mode === 'ARENA'">· Arena</template></span
+          >
           <span class="label">{{ statusText }}</span>
         </header>
         <div class="panel-body room-body">
@@ -187,7 +289,57 @@ const statusText = computed(() => {
         </div>
       </section>
 
-      <div v-else class="grid">
+      <section v-if="!current" class="panel search" aria-label="Spieler suchen">
+        <header class="panel-head">
+          <span class="label"><i class="dot" />Spieler suchen</span>
+          <span v-if="search" class="label mono">{{ search.waiting }} suchen gerade</span>
+        </header>
+        <div class="panel-body search-body">
+          <template v-if="!search">
+            <p class="search-text">
+              <template v-if="mode === 'ARENA'">
+                Gewerteter Echtzeit-Kampf im Arena-Modus gegen einen Spieler mit ähnlichem
+                Arena-Rang. Beide steuern selbst (WASD, Shift, Leertaste).
+              </template>
+              <template v-else>
+                Gewerteter Kampf gegen einen Spieler mit ähnlichen Liga-Punkten. Beide spinnen an,
+                beide lösen ihre Ult selbst aus.
+              </template>
+            </p>
+            <button
+              type="button"
+              class="cta"
+              :disabled="busy || beybladeId == null"
+              @click="startSearch"
+            >
+              <span>Gegner suchen</span>
+              <span class="cta-arrow" aria-hidden="true">→</span>
+            </button>
+          </template>
+          <template v-else>
+            <p class="search-text" aria-live="polite">
+              <span class="pulse" aria-hidden="true" />
+              Suche läuft <strong class="mono">{{ waitedText }}</strong>
+              <span class="faint">· je länger, desto größer der LP-Abstand</span>
+            </p>
+            <div class="search-actions">
+              <button
+                v-if="search.waitedMs >= OFFER_BOT_MS"
+                type="button"
+                class="btn-secondary"
+                @click="playBot"
+              >
+                Solange gegen die KI
+              </button>
+              <button type="button" class="btn-secondary" :disabled="busy" @click="stopSearch">
+                Abbrechen
+              </button>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <div v-if="!current" class="grid">
         <section class="panel" aria-label="Lobby erstellen">
           <header class="panel-head">
             <span class="label"><i class="dot" />Neue Lobby</span>
@@ -237,7 +389,9 @@ const statusText = computed(() => {
             </p>
             <div v-for="l in openLobbies" :key="l.id" class="row">
               <div class="row-text">
-                <strong>{{ l.name }}</strong>
+                <strong
+                  >{{ l.name }}<small v-if="l.mode === 'ARENA'" class="tag">Arena</small></strong
+                >
                 <span class="mono faint">{{ l.id }} · Host {{ l.host }}</span>
               </div>
               <button
@@ -257,6 +411,92 @@ const statusText = computed(() => {
 </template>
 
 <style scoped>
+.mode-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.mode-switch button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mode-switch button.active {
+  background: var(--line);
+  color: var(--text);
+}
+
+.tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.search {
+  margin-bottom: 16px;
+}
+
+.search-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.search-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.search-text strong {
+  color: var(--text);
+  font-size: 1.1rem;
+}
+
+.search-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
 .lobby {
   max-width: 1100px;
   margin: 0 auto;

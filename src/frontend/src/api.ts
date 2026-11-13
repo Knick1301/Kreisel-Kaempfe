@@ -308,6 +308,8 @@ export interface MatchDto {
   battleId?: number
   /** Kampfbericht, sobald beide angespinnt haben */
   report?: BattleReport
+  /** steigt mit jeder ausgelösten Ult: Ein neuer Wert heißt, der Verlauf hat sich geändert */
+  version: number
 }
 
 /** Rohe Eingabe: Moment des Loslassens (ms ab Start des Zeigers auf dem eigenen Gerät) plus Zug. */
@@ -403,11 +405,21 @@ export interface PlayerStats {
   botWins?: number
   botLosses?: number
   ranking: Rank
+  /** Arena-Modus (WASD): Rang, Bilanz und Platz, Rang null ohne Arena-Kampf */
+  arenaRanking?: Rank | null
+  arenaWins?: number
+  arenaLosses?: number
+  arenaRank?: number | null
+  /** gewonnene Solo-Cups */
+  cupsWon?: number
 }
 
 export function fetchStats() {
   return get<PlayerStats>('/me/stats')
 }
+
+/** Kampfart: berechnet (CLASSIC) oder Echtzeit-Physik mit Steuerung (ARENA) */
+export type FightMode = 'CLASSIC' | 'ARENA'
 
 export type LobbyStatus = 'OPEN' | 'READY' | 'FINISHED'
 
@@ -418,7 +430,9 @@ export interface LobbyDto {
   guest: string | null
   status: LobbyStatus
   createdAt: string
-  result: BattleReport | null
+  /** PvP-Match (CLASSIC) bzw. Arena-Raum (ARENA), sobald der Host gestartet hat */
+  matchId?: string | null
+  mode?: FightMode
 }
 
 export function fetchLobbies() {
@@ -429,8 +443,8 @@ export function fetchLobby(id: string) {
   return get<LobbyDto>(`/lobbies/${encodeURIComponent(id)}`)
 }
 
-export function createLobby(name: string, beybladeId: number) {
-  return request<LobbyDto>('POST', '/lobbies', { name, beybladeId })
+export function createLobby(name: string, beybladeId: number, mode: FightMode = 'CLASSIC') {
+  return request<LobbyDto>('POST', '/lobbies', { name, beybladeId, mode })
 }
 
 export function joinLobby(id: string, beybladeId: number) {
@@ -438,7 +452,186 @@ export function joinLobby(id: string, beybladeId: number) {
 }
 
 export function startLobby(id: string) {
-  return request<BattleReport>('POST', `/lobbies/${encodeURIComponent(id)}/start`)
+  return request<LobbyDto>('POST', `/lobbies/${encodeURIComponent(id)}/start`)
+}
+
+// ---------------------------------------------------------------- Spielersuche
+
+export interface MatchmakingDto {
+  state: 'WAITING' | 'FOUND'
+  waitedMs: number
+  matchId?: string
+  /** Spieler, die gerade suchen (inklusive einem selbst) */
+  waiting: number
+  /** bei ARENA ist `matchId` ein Arena-Raum */
+  mode?: FightMode
+}
+
+export function joinMatchmaking(beybladeId: number, mode: FightMode = 'CLASSIC') {
+  return request<MatchmakingDto>('POST', '/matchmaking', { beybladeId, mode })
+}
+
+export function fetchMatchmaking() {
+  return get<MatchmakingDto>('/matchmaking')
+}
+
+export function cancelMatchmaking() {
+  return request<void>('DELETE', '/matchmaking')
+}
+
+// ---------------------------------------------------------------- Arena-Modus (Echtzeit-Physik auf dem Server)
+
+export interface ArenaResultDto {
+  ratingDelta: number
+  xpGained: number
+  rank: Rank
+}
+
+/** Arena-Raum: Die Physik läuft auf dem Server, der Kampf selbst über den WebSocket `/ws/arena`. */
+export interface ArenaRoomDto {
+  id: string
+  mode: BattleMode
+  /** Kampf aus dem Solo-Cup (ohne Liga-Punkte) */
+  cup: boolean
+  status: 'LAUNCH' | 'COUNTDOWN' | 'FIGHT' | 'DONE'
+  yourSide: Side
+  arena: ArenaInfo
+  fighters: [FighterDto, FighterDto]
+  launch: LaunchChallenge
+  youLaunched: boolean
+  opponentReady: boolean
+  expiresInMs: number
+  result: {
+    winner: Side
+    finish: FinishType
+    durationMs: number
+    /** eigene Wertung, fehlt bei der KI */
+    you: ArenaResultDto | null
+  } | null
+}
+
+/** Kampf gegen einen zufälligen KI-Gegner */
+export function createArenaRoom(beybladeId: number) {
+  return request<ArenaRoomDto>('POST', '/arena/rooms', { beybladeId })
+}
+
+export function fetchArenaRoom(id: string) {
+  return get<ArenaRoomDto>(`/arena/rooms/${encodeURIComponent(id)}`)
+}
+
+export function launchArenaRoom(id: string, input: LaunchInput) {
+  return request<ArenaRoomDto>('POST', `/arena/rooms/${encodeURIComponent(id)}/launch`, input)
+}
+
+export function fetchArenaLeaderboard(limit = 10) {
+  return get<Leaderboard>(`/arena/leaderboard?limit=${limit}`)
+}
+
+// ---------------------------------------------------------------- Solo-Cup
+
+export interface CupEntry {
+  slot: number
+  beyblade: string
+  /** Spieler, null bei KI */
+  username: string | null
+  you: boolean
+  /** Stufe der KI 0–2, null beim Spieler */
+  level: number | null
+}
+
+export interface CupPairing {
+  a: CupEntry
+  b: CupEntry
+  winner: Side | null
+  finish: FinishType | null
+}
+
+export interface TournamentDto {
+  id: string
+  format: FightMode
+  status: 'RUNNING' | 'WON' | 'OUT'
+  round: number
+  roundName: string | null
+  results: CupPairing[][]
+  upcoming: CupPairing[]
+  opponent: FighterDto | null
+  matchId: string | null
+  xpReward: number
+}
+
+export function startTournament(beybladeId: number, format: FightMode = 'CLASSIC') {
+  return request<TournamentDto>('POST', '/tournament', { beybladeId, format })
+}
+
+export function fetchTournament() {
+  return get<TournamentDto>('/tournament')
+}
+
+export function nextTournamentFight() {
+  return request<TournamentDto>('POST', '/tournament/next')
+}
+
+// ---------------------------------------------------------------- Freunde
+
+export interface Friend {
+  /** ID der Freundschaft (Annehmen, Ablehnen, Entfernen) */
+  id: number
+  username: string
+  online: boolean
+  ranking: Rank
+  arenaRanking: Rank | null
+}
+
+export interface Challenge {
+  id: string
+  from: string
+  to: string
+  /** von mir ausgesprochen */
+  mine: boolean
+  mode: FightMode
+  /** Match (klassisch) bzw. Raum (Arena), sobald angenommen */
+  matchId: string | null
+  expiresInMs: number
+}
+
+export interface FriendsDto {
+  friends: Friend[]
+  incoming: Friend[]
+  outgoing: Friend[]
+  challenges: Challenge[]
+}
+
+export function fetchFriends() {
+  return get<FriendsDto>('/friends')
+}
+
+export function addFriend(username: string) {
+  return request<FriendsDto>('POST', '/friends', { username })
+}
+
+export function acceptFriend(id: number) {
+  return request<FriendsDto>('POST', `/friends/${id}/accept`)
+}
+
+export function removeFriend(id: number) {
+  return request<FriendsDto>('DELETE', `/friends/${id}`)
+}
+
+export function challengeFriend(username: string, beybladeId: number, mode: FightMode) {
+  return request<FriendsDto>('POST', `/friends/${encodeURIComponent(username)}/challenge`, {
+    beybladeId,
+    mode,
+  })
+}
+
+export function acceptChallenge(id: string, beybladeId: number) {
+  return request<FriendsDto>('POST', `/friends/challenges/${encodeURIComponent(id)}/accept`, {
+    beybladeId,
+  })
+}
+
+export function declineChallenge(id: string) {
+  return request<FriendsDto>('DELETE', `/friends/challenges/${encodeURIComponent(id)}`)
 }
 
 export function leaveLobby(id: string) {

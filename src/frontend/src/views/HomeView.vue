@@ -89,7 +89,18 @@ const modes = [
     sub: 'Lobby erstellen oder beitreten',
     to: '/lobby',
   },
-  { id: 'tournament', label: 'Turnier', sub: 'Kommt bald', to: null },
+  {
+    id: 'arena',
+    label: 'Arena-Modus',
+    sub: 'Selbst steuern mit WASD · eigener Rang',
+    to: '/arena',
+  },
+  {
+    id: 'tournament',
+    label: 'Solo-Cup',
+    sub: '8er-Turnier gegen immer stärkere KI',
+    to: '/turnier',
+  },
 ] as const
 
 function openMode(to: string | null) {

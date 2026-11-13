@@ -104,6 +104,81 @@ public class MatchService {
         return dto(m, m.a, false);
     }
 
+    /**
+     * Cup-Kampf gegen einen vorgegebenen KI-Gegner: ohne Liga-Punkte, die KI spinnt mit {@code botSkill} an.
+     *
+     * @return Match-ID
+     */
+    public String createCupMatch(String username, Long beybladeId, FighterSnapshot botFighter, double botSkill) {
+        List<Arena> all = Arena.all();
+        Arena arena = all.get(random.nextInt(all.size()));
+        String variant = BattleService.selectVariant(arena, null);
+        User me = user(username);
+        Beyblade mine = beyblades.owned(me, beybladeId);
+        User bot = battles.botUser();
+        cleanUp(username);
+        Instant now = clock.instant();
+        LaunchChallenge challenge = LaunchChallenge.random(random);
+        Match m = new Match(UUID.randomUUID().toString(), BattleMode.BOT, arena, variant, challenge, now,
+                now.plusMillis(LaunchRules.SUBMIT_TIMEOUT_MS),
+                new Seat(Side.A, me.getId(), me.getUsername(), FighterSnapshot.of(me, mine), true),
+                new Seat(Side.B, bot.getId(), bot.getUsername(), botFighter, false));
+        m.ranked = false;
+        m.b.submit(BotLauncher.input(challenge, random, botSkill));
+        matches.put(m.id, m);
+        return m.id;
+    }
+
+    /** Sieger-Seite eines gewerteten Matches, {@code null} solange offen. */
+    public Side winnerIfDone(String id) {
+        Match m = matches.get(id);
+        if (m == null) return null;
+        resolveIfDue(m);
+        synchronized (m) {
+            return m.status == MatchStatus.DONE && m.fight != null ? m.fight.getWinnerSide() : null;
+        }
+    }
+
+    /** Finish eines gewerteten Matches, {@code null} solange offen. */
+    public org.example.game.FinishType finishIfDone(String id) {
+        Match m = matches.get(id);
+        if (m == null) return null;
+        synchronized (m) {
+            return m.status == MatchStatus.DONE && m.fight != null ? m.fight.getFinish() : null;
+        }
+    }
+
+    /**
+     * Neues PvP-Match zwischen zwei Menschen (Lobby oder Spielersuche). Beide spinnen an, beide lösen ihre Ult
+     * selbst aus. Laufende Matches beider Spieler werden vorher gewertet.
+     *
+     * @param arenaId {@code null} = zufällige Arena
+     * @return Match-ID, beide Spieler holen das Match mit {@link #get}
+     */
+    public String createPvpMatch(String userA, Long beybladeA, String userB, Long beybladeB, String arenaId) {
+        if (userA.equals(userB)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ein Kampf braucht zwei Spieler.");
+        }
+        List<Arena> all = Arena.all();
+        Arena arena = arenaId != null ? BattleService.selectArena(arenaId) : all.get(random.nextInt(all.size()));
+        String variant = BattleService.selectVariant(arena, null);
+        User a = user(userA);
+        User b = user(userB);
+        Beyblade beyA = beyblades.owned(a, beybladeA);
+        Beyblade beyB = beyblades.owned(b, beybladeB);
+
+        cleanUp(userA);
+        cleanUp(userB);
+        Instant now = clock.instant();
+        LaunchChallenge challenge = LaunchChallenge.random(random);
+        Match m = new Match(UUID.randomUUID().toString(), BattleMode.PVP, arena, variant, challenge, now,
+                now.plusMillis(LaunchRules.SUBMIT_TIMEOUT_MS),
+                new Seat(Side.A, a.getId(), a.getUsername(), FighterSnapshot.of(a, beyA), true),
+                new Seat(Side.B, b.getId(), b.getUsername(), FighterSnapshot.of(b, beyB), true));
+        matches.put(m.id, m);
+        return m.id;
+    }
+
     public MatchDto get(String id, String username) {
         Match m = match(id);
         Seat me = m.seatOf(username);
@@ -155,11 +230,15 @@ public class MatchService {
             }
             me.ult = next;
             m.fight = r;
+            m.version++;
         }
         return dto(m, me, true);
     }
 
-    /** Kampf zu Ende gesehen: werten und speichern. Mehrfach aufrufbar. */
+    /**
+     * Kampf zu Ende gesehen: werten und speichern. Mehrfach aufrufbar. Im PvP erst, wenn beide fertig sind
+     * (sonst könnte eine späte Ult des Gegners verloren gehen), spätestens nach {@link #FIGHT_GRACE}.
+     */
     public MatchDto finish(String id, String username) {
         Match m = match(id);
         Seat me = m.seatOf(username);
@@ -168,7 +247,9 @@ public class MatchService {
             if (m.status == MatchStatus.LAUNCH) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Erst anspinnen.");
             }
-            commit(m);
+            me.finished = true;
+            Seat them = me == m.a ? m.b : m.a;
+            if (m.mode != BattleMode.PVP || them.finished) commit(m);
         }
         return dto(m, me, true);
     }
@@ -205,7 +286,7 @@ public class MatchService {
     /** Vorläufigen Kampf werten und speichern, genau einmal. */
     private void commit(Match m) {
         if (m.status != MatchStatus.FIGHT) return;
-        m.battleId = battles.commit(m.fight).getId();
+        m.battleId = battles.commit(m.fight, m.ranked).getId();
         m.status = MatchStatus.DONE;
     }
 
@@ -221,7 +302,8 @@ public class MatchService {
                 List.of(battles.fighterDto(Side.A, m.a.snapshot, m.mode),
                         battles.fighterDto(Side.B, m.b.snapshot, m.mode)),
                 MatchupDto.of(styleA, styleB), LaunchChallengeDto.from(m.challenge),
-                me.submitted, them.submitted, m.status == MatchStatus.LAUNCH ? left : 0, m.battleId, report);
+                me.submitted, them.submitted, m.status == MatchStatus.LAUNCH ? left : 0, m.battleId, report,
+                m.version);
     }
 
     private Match match(String id) {
@@ -238,7 +320,8 @@ public class MatchService {
         Instant cutoff = clock.instant().minus(RETENTION);
         for (Match m : List.copyOf(matches.values())) {
             boolean old = m.createdAt.isBefore(cutoff);
-            boolean mine = m.a.username.equals(username) && m.status != MatchStatus.DONE;
+            boolean mine = (m.a.username.equals(username) || m.b.username.equals(username))
+                    && m.status != MatchStatus.DONE;
             if (!old && !mine) continue;
             synchronized (m) {
                 commit(m);
@@ -272,6 +355,10 @@ public class MatchService {
         /** vorläufiger Kampf (FIGHT), noch nicht gespeichert */
         BattleResult fight;
         Instant fightStart;
+        /** steigt mit jedem Ult-Druck: Der Gegner erkennt daran, dass sich der Kampf geändert hat */
+        int version;
+        /** {@code false}: ohne Liga-Punkte (Cup) */
+        boolean ranked = true;
 
         Match(String id, BattleMode mode, Arena arena, String variant, LaunchChallenge challenge, Instant createdAt,
               Instant deadline, Seat a, Seat b) {
@@ -301,6 +388,8 @@ public class MatchService {
         final FighterSnapshot snapshot;
         LaunchInput input;
         boolean submitted;
+        /** hat den Kampf zu Ende gesehen */
+        boolean finished;
         /** Menschen lösen ihre Ult selbst aus, die KI automatisch */
         UltInput ult;
 

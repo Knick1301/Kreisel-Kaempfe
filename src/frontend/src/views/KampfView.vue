@@ -177,6 +177,11 @@ const { time, callouts } = playback
 
 const replayId = computed(() => (route.params.id ? Number(route.params.id) : null))
 const isReplay = computed(() => replayId.value !== null)
+/** Kampf aus dem Solo-Cup: danach zurück zum Turnierbaum */
+const isCup = computed(() => route.query.cup === '1')
+const againLabel = computed(() =>
+  isCup.value ? 'Zurück zum Turnier' : isReplay.value ? 'Gegen KI kämpfen' : 'Nochmal kämpfen',
+)
 
 // ---------------------------------------------------------------- abgeleitete Anzeige
 
@@ -277,6 +282,8 @@ async function init() {
   calm.value = false
   phase.value = 'loading'
   if (replayId.value !== null) return loadReplay(replayId.value)
+  const matchParam = typeof route.query.match === 'string' ? route.query.match : null
+  if (matchParam) return loadMatch(matchParam)
   try {
     const list = await fetchBeyblades()
     beyblades.value = Array.isArray(list) ? list : []
@@ -287,6 +294,45 @@ async function init() {
     phase.value = 'select'
   } catch (e) {
     fail(e)
+  }
+}
+
+/**
+ * PvP-Match öffnen (aus Lobby oder Spielersuche): Gegner und Arena zeigen, dann anspinnen. Wer neu lädt,
+ * landet je nach Stand beim Anspinnen, beim Warten auf den Gegner oder im laufenden Kampf.
+ */
+async function loadMatch(id: string) {
+  const token = run
+  try {
+    const m = await fetchMatch(id)
+    if (token !== run) return
+    matchMode.value = m.mode
+    matchVersion = m.version
+    if (m.status === 'LAUNCH' && !m.youLaunched) {
+      showMatch(m)
+      phase.value = 'intro'
+      return
+    }
+    showMatch(m)
+    if (m.status === 'LAUNCH') {
+      // schon angespinnt, Gegner fehlt noch
+      phase.value = 'resolving'
+      const done = await awaitReport(id, null, token)
+      if (token !== run || !done) return
+      startFight(id, done)
+      return
+    }
+    if (m.report) {
+      if (m.status === 'FIGHT') startFight(id, m)
+      else {
+        match.value = null
+        prepare(m.report)
+        phase.value = 'result'
+        showDialog.value = true
+      }
+    }
+  } catch (e) {
+    if (token === run) fail(e)
   }
 }
 
@@ -314,6 +360,12 @@ function fail(e: unknown) {
 
 /** Laufendes Match, in dem der Spieler seine Ult noch auslösen kann; null bei Replays */
 const liveMatchId = ref<string | null>(null)
+/** Art des laufenden Matches (BOT oder PVP) */
+const matchMode = ref<MatchDto['mode'] | null>(null)
+/** Stand des Verlaufs, den wir zeigen: steigt mit jeder Ult (eigene oder gegnerische) */
+let matchVersion = 0
+/** Kampf zu Ende gesehen, der Gegner noch nicht */
+const waitingForOpponent = ref(false)
 /** Druck läuft (Anfrage beim Server) */
 const pressing = ref(false)
 /** Kampfzeit des letzten eigenen Drucks: Das ULT-Ereignis dazu hat seine Einblendung schon bekommen */
@@ -388,6 +440,7 @@ async function activateUlt() {
   try {
     const m = await triggerUlt(id, t)
     if (token !== run) return
+    matchVersion = m.version
     response = m.report ?? null
     if (!response) failed = true
     pressedAt = t
@@ -544,36 +597,80 @@ async function onLaunch(input: LaunchInput) {
   try {
     const [done] = await Promise.all([awaitReport(m.id, input, token), wait(VERDICT_MS)])
     if (token !== run || !done) return
-    // Der Kampf ist erst vorläufig: Bis zum Ende kann der Spieler seine Ult auslösen
-    liveMatchId.value = done.id ? null : m.id
-    pressedAt = -Infinity
-    match.value = null
-    standby = null
-    prepare(done)
-    if (!done.timeline || (reducedMotion && !calm.value)) {
-      playback.skip()
-      return
-    }
-    phase.value = 'fight'
-    playback.start()
+    startFight(m.id, done)
   } catch (e) {
     if (token !== run) return
     fail(e)
   }
 }
 
+/** Kampf aus dem Match starten: vorläufig, bis zum Ende kann der Spieler seine Ult auslösen. */
+function startFight(id: string, m: MatchDto) {
+  const r = m.report
+  if (!r) return
+  matchMode.value = m.mode
+  matchVersion = m.version
+  liveMatchId.value = r.id ? null : id
+  pressedAt = -Infinity
+  waitingForOpponent.value = false
+  match.value = null
+  standby = null
+  prepare(r)
+  if (!r.timeline || (reducedMotion && !calm.value)) {
+    playback.skip()
+    return
+  }
+  phase.value = 'fight'
+  playback.start()
+  if (m.mode === 'PVP' && liveMatchId.value) void watchOpponent(id, run)
+}
+
 /**
- * Start abgeben und auf den Kampf warten. Gegen die KI kommt der Bericht sofort zurück, gegen einen Menschen
- * (später) fragt der Client nach, bis auch der Gegner angespinnt hat.
+ * Start abgeben (oder nur warten, `input` null) und auf den Kampf warten. Gegen die KI kommt der Bericht
+ * sofort zurück, gegen einen Menschen fragt der Client nach, bis auch der Gegner angespinnt hat.
  */
-async function awaitReport(id: string, input: LaunchInput, token: number) {
-  let m = await submitLaunch(id, input)
+async function awaitReport(id: string, input: LaunchInput | null, token: number) {
+  let m = input ? await submitLaunch(id, input) : await fetchMatch(id)
   while (!m.report && token === run) {
     await wait(500)
     m = await fetchMatch(id)
   }
-  return m.report ?? null
+  return m.report ? m : null
 }
+
+/** Zeitpunkte der Ults einer Seite im Verlauf */
+const ultTimes = (r: BattleReport | null, side: Side) =>
+  (r?.timeline?.events ?? []).filter((e) => e.type === 'ULT' && e.side === side).map((e) => e.t)
+
+/**
+ * PvP: Während des Kampfs nachfragen, ob der Gegner seine Ult gedrückt hat. Neuer Verlauf: zurück zum
+ * Zeitpunkt des Drucks, dort läuft die Einblendung des Gegners, der Rücksprung verschwindet dahinter.
+ */
+async function watchOpponent(id: string, token: number) {
+  while (token === run && liveMatchId.value === id && phase.value === 'fight') {
+    await wait(PVP_POLL_MS)
+    if (token !== run || liveMatchId.value !== id) return
+    if (pressing.value || cutIn.value) continue
+    let m: MatchDto
+    try {
+      m = await fetchMatch(id)
+    } catch {
+      continue
+    }
+    if (token !== run || liveMatchId.value !== id || !m.report?.timeline) continue
+    if (m.version <= matchVersion || pressing.value) continue
+    matchVersion = m.version
+    const them = other(mySide.value)
+    const known = new Set(ultTimes(report.value, them))
+    const fresh = ultTimes(m.report, them).filter((t) => !known.has(t))
+    const at = fresh.length ? Math.min(...fresh) : Infinity
+    if (at < playback.clock.t) playback.rewind(at - 1)
+    applyNewTimeline(m.report)
+  }
+}
+
+/** So oft fragt der Kampf im PvP nach dem Gegner */
+const PVP_POLL_MS = 500
 
 async function runCountdown() {
   const token = ++run
@@ -602,18 +699,27 @@ function onFightEnd() {
     showResult()
     return
   }
-  // Jetzt erst werten lassen: Ergebnis mit Liga-Punkten kommt vom Server
+  // Jetzt erst werten lassen: Ergebnis mit Liga-Punkten kommt vom Server. Im PvP wertet der Server erst,
+  // wenn auch der Gegner fertig ist, solange warten wir.
   const token = run
   phase.value = 'result'
-  finishMatch(id)
-    .then((m) => {
+  void (async () => {
+    try {
+      let m = await finishMatch(id)
+      if (m.status !== 'DONE') waitingForOpponent.value = true
+      const until = Date.now() + 100_000
+      while (m.status !== 'DONE' && token === run && Date.now() < until) {
+        await wait(1000)
+        m = await fetchMatch(id)
+      }
       if (token !== run) return
+      waitingForOpponent.value = false
       if (m.report) report.value = m.report
       showResult()
-    })
-    .catch((e) => {
+    } catch (e) {
       if (token === run) fail(e)
-    })
+    }
+  })()
 }
 
 function showResult() {
@@ -641,6 +747,10 @@ function watchCalm() {
 }
 
 function again() {
+  if (isCup.value) {
+    router.push({ name: 'turnier' })
+    return
+  }
   if (isReplay.value) {
     router.push({ name: 'kampf' })
     return
@@ -759,6 +869,9 @@ const dialogNote = computed(() =>
         <p v-if="countdown" :key="countdown" class="countdown" aria-live="assertive">
           {{ countdown }}
         </p>
+        <p v-if="waitingForOpponent" class="stage-hint waiting" aria-live="polite">
+          Warte, bis {{ them?.username ?? 'dein Gegner' }} den Kampf zu Ende gesehen hat …
+        </p>
         <p v-if="report && inBattle && !animate && phase === 'intro'" class="stage-hint">
           {{
             webgl
@@ -865,6 +978,9 @@ const dialogNote = computed(() =>
           <p class="cta-sub" :role="error ? 'alert' : undefined">
             {{ error ?? `Zufälliger KI-Gegner · ${arenaLabel}` }}
           </p>
+          <RouterLink to="/arena" class="cta-sub mode-link"
+            >Oder selbst steuern: Arena-Modus →</RouterLink
+          >
         </template>
 
         <template v-else-if="phase === 'intro'">
@@ -890,7 +1006,7 @@ const dialogNote = computed(() =>
 
         <template v-else-if="phase === 'result'">
           <div
-            v-if="!isReplay"
+            v-if="!isReplay && !isCup"
             class="next-arena"
             role="radiogroup"
             aria-label="Arena für den nächsten Kampf"
@@ -916,7 +1032,7 @@ const dialogNote = computed(() =>
             </button>
             <button type="button" class="btn-secondary" @click="showDialog = true">Ergebnis</button>
             <button type="button" class="cta" @click="again">
-              <span>{{ isReplay ? 'Gegen KI kämpfen' : 'Nochmal kämpfen' }}</span>
+              <span>{{ againLabel }}</span>
               <span class="cta-arrow" aria-hidden="true">→</span>
             </button>
           </div>
@@ -938,7 +1054,7 @@ const dialogNote = computed(() =>
       :my-side="mySide"
       :replay="!!report.timeline"
       :replay-label="reducedMotion && !calm ? 'Animation ansehen' : 'Replay'"
-      :again-label="isReplay ? 'Gegen KI kämpfen' : 'Nochmal kämpfen'"
+      :again-label="againLabel"
       :note="dialogNote"
       :fresh="!isReplay"
       @close="showDialog = false"
@@ -1167,6 +1283,18 @@ const dialogNote = computed(() =>
   color: var(--text-muted);
   transform: translateX(-50%);
   white-space: nowrap;
+}
+
+.mode-link {
+  padding: 4px 10px;
+  border-radius: 3px;
+  background: var(--bg);
+  text-decoration: none;
+}
+
+.mode-link:hover,
+.mode-link:focus-visible {
+  color: var(--text);
 }
 
 .launch-sub {

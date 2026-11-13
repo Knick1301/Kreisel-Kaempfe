@@ -77,6 +77,27 @@ public class User {
         this.rating = rating;
     }
 
+    /** Arena-Modus (Physik, Steuerung): eigener Rang, getrennt vom klassischen. {@code null} = noch nie gespielt */
+    private Integer arenaRating;
+    private Integer arenaXp;
+    private Integer arenaWins;
+    private Integer arenaLosses;
+
+    /** Gewonnene Solo-Cups (Turnier gegen die KI) */
+    private Integer cupsWon;
+
+    public Integer getArenaRating() { return arenaRating; }
+    public void setArenaRating(Integer arenaRating) { this.arenaRating = arenaRating; }
+    public Integer getArenaXp() { return arenaXp; }
+    public void setArenaXp(Integer arenaXp) { this.arenaXp = arenaXp; }
+    public Integer getArenaWins() { return arenaWins; }
+    public void setArenaWins(Integer arenaWins) { this.arenaWins = arenaWins; }
+    public Integer getArenaLosses() { return arenaLosses; }
+    public void setArenaLosses(Integer arenaLosses) { this.arenaLosses = arenaLosses; }
+
+    public int getCupsWon() { return cupsWon == null ? 0 : cupsWon; }
+    public void setCupsWon(Integer cupsWon) { this.cupsWon = cupsWon; }
+
     public Integer getXp() {
         return xp;
     }

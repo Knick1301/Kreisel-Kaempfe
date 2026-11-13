@@ -186,14 +186,20 @@ describe('RanglisteView', () => {
     expect(wrapper.text()).toContain('Silber III')
     expect(wrapper.find('tr.me').text()).toContain('Bronze II')
     // Liga-Punkte ab 0: Rating 1010 = 60 LP
-    expect(wrapper.find('tr.me td.col-wins').text()).toBe('60')
-    // alle 16 Ränge, der eigene markiert
-    const tiers = wrapper.findAll('.tier-list li')
-    expect(tiers).toHaveLength(16)
+    expect(wrapper.find('tr.me td.col-lp').text()).toBe('60')
+    // Dein Rang: Liga, LP, Platz von allen
+    const mine = wrapper.find('.mine')
+    expect(mine.text()).toContain('Bronze II')
+    expect(mine.text()).toContain('60 LP')
+    expect(mine.find('.mine-place').text()).toContain('von 2')
+    expect(mine.text()).toContain('50 %')
+    // Rangleiter: 6 Ligen von Meister bis Bronze, 16 Stufen, die eigene markiert
+    const tiers = wrapper.findAll('.ladder .tier-row')
+    expect(tiers).toHaveLength(6)
     expect(tiers[0]!.text()).toContain('Meister')
-    expect(tiers[15]!.text()).toContain('Bronze III')
-    expect(tiers[15]!.text()).toContain('0')
-    expect(wrapper.find('.tier-list li.current').text()).toContain('Bronze II')
+    expect(tiers[5]!.text()).toContain('Bronze')
+    expect(wrapper.findAll('.ladder .step')).toHaveLength(16)
+    expect(wrapper.find('.ladder .step.current').attributes('title')).toContain('Bronze II')
   })
 
   it('zeigt „Noch keine Kämpfe“ ohne Ergebnisse', async () => {
@@ -221,5 +227,56 @@ describe('RanglisteView', () => {
 
     expect(wrapper.text()).toContain('Noch keine Kämpfe')
     expect(wrapper.find('table').exists()).toBe(false)
+  })
+
+  it('schaltet auf die Arena-Rangliste mit eigenem Rang um', async () => {
+    setSession('token', 'demo')
+    const arenaEntry = {
+      rank: 2,
+      username: 'demo',
+      wins: 3,
+      losses: 1,
+      ranking: rank(1100, 'Silber', 3, 'Silber III'),
+    }
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async (url: string) =>
+      url.startsWith('/api/arena/leaderboard')
+        ? new Response(
+            JSON.stringify({
+              entries: [arenaEntry],
+              me: arenaEntry,
+              totalPlayers: 4,
+              empty: false,
+            }),
+          )
+        : url.startsWith('/api/leaderboard')
+          ? new Response(JSON.stringify({ entries: [], me: null, totalPlayers: 0, empty: true }))
+          : new Response(
+              JSON.stringify({
+                username: 'demo',
+                wins: 0,
+                losses: 0,
+                winRate: 0,
+                rank: null,
+                ranking: rank(950, 'Bronze', 3, 'Bronze III'),
+              }),
+            ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(RanglisteView, { global: { stubs: ['RouterLink'] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Noch keine Kämpfe')
+
+    const arenaButton = wrapper.findAll('.mode-switch button')[1]!
+    await arenaButton.trigger('click')
+    await flushPromises()
+
+    expect(arenaButton.attributes('aria-checked')).toBe('true')
+    expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith('/api/arena/leaderboard'))).toBe(
+      true,
+    )
+    expect(wrapper.find('.mine-league').text()).toBe('Silber III')
+    expect(wrapper.find('.mine-place').text()).toContain('#2')
+    expect(wrapper.find('.mine-stats').text()).toContain('75 %')
   })
 })

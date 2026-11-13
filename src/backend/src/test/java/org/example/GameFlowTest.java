@@ -36,6 +36,7 @@ class GameFlowTest {
     @Autowired BattleService battles;
     @Autowired LeaderboardService leaderboard;
     @Autowired LobbyService lobbies;
+    @Autowired org.example.services.MatchService matchService;
 
     private static HttpStatus status(ResponseStatusException e) {
         return HttpStatus.valueOf(e.getStatusCode().value());
@@ -157,9 +158,14 @@ class GameFlowTest {
                 () -> lobbies.start(lobby.getId(), player("rivale")));
         assertEquals(HttpStatus.FORBIDDEN, status(notHost));
 
-        BattleResult result = lobbies.start(lobby.getId(), "demo");
-        assertEquals(LobbyStatus.FINISHED, lobby.getStatus());
-        assertEquals(result.getId(), lobby.getBattleResultId());
+        // Start legt ein PvP-Match an: beide Spieler sehen es, jeder auf seiner Seite
+        Lobby started = lobbies.start(lobby.getId(), "demo");
+        assertEquals(LobbyStatus.FINISHED, started.getStatus());
+        assertNotNull(started.getMatchId());
+        assertEquals(org.example.game.Side.A, matchService.get(started.getMatchId(), "demo").yourSide());
+        assertEquals(org.example.game.Side.B,
+                matchService.get(started.getMatchId(), player("rivale")).yourSide());
+        assertEquals(org.example.game.BattleMode.PVP, matchService.get(started.getMatchId(), "demo").mode());
     }
 
     @Test

@@ -17,9 +17,10 @@ import java.util.List;
  * @param expiresInMs   verbleibende Zeit fürs Anspinnen, danach zählt ein fehlender Start als verpasst
  * @param battleId      gespeicherter Kampf, sobald beide angespinnt haben
  * @param report        vollständiger Kampfbericht inklusive Timeline, sobald beide angespinnt haben
+ * @param version       steigt mit jeder ausgelösten Ult: Ein neuer Wert heißt, der Verlauf hat sich geändert
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record MatchDto(String id, BattleMode mode, MatchStatus status, Side yourSide, ArenaDto arena,
                        List<FighterDto> fighters, MatchupDto matchup, LaunchChallengeDto launch,
                        boolean youLaunched, boolean opponentReady, long expiresInMs, Long battleId,
-                       BattleReportDto report) {}
+                       BattleReportDto report, int version) {}

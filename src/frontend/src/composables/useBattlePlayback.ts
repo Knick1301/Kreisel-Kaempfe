@@ -98,6 +98,19 @@ export function useBattlePlayback() {
     ended = false
   }
 
+  /**
+   * Uhr auf `t` zurückstellen (PvP: Der Gegner hat bei `t` seine Ult gedrückt, wir waren schon weiter).
+   * Ereignisse ab `t` laufen danach erneut.
+   */
+  function rewind(t: number) {
+    const target = Math.max(0, Math.min(t, clock.t))
+    clock.seek(target)
+    time.value = target
+    const events = report?.timeline?.events ?? []
+    cursor = events.findIndex((e) => e.t > target)
+    if (cursor < 0) cursor = events.length
+  }
+
   function onEvent(fn: (e: TimelineEvent) => boolean) {
     listener = fn
   }
@@ -264,6 +277,7 @@ export function useBattlePlayback() {
     reset,
     stop,
     replace,
+    rewind,
     hold,
     resume,
     onEvent,

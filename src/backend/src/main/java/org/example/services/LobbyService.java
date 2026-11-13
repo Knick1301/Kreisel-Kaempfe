@@ -1,7 +1,7 @@
 package org.example.services;
 
-import org.example.entities.BattleResult;
 import org.example.entities.User;
+import org.example.game.FightMode;
 import org.example.game.Lobby;
 import org.example.game.LobbyStatus;
 import org.springframework.http.HttpStatus;
@@ -24,15 +24,22 @@ public class LobbyService {
     private final SecureRandom random = new SecureRandom();
     private final UserService users;
     private final BeybladeService beyblades;
-    private final BattleService battles;
+    private final MatchService matches;
+    private final ArenaRoomService rooms;
 
-    public LobbyService(UserService users, BeybladeService beyblades, BattleService battles) {
+    public LobbyService(UserService users, BeybladeService beyblades, MatchService matches,
+                        ArenaRoomService rooms) {
         this.users = users;
         this.beyblades = beyblades;
-        this.battles = battles;
+        this.matches = matches;
+        this.rooms = rooms;
     }
 
-    public synchronized Lobby create(String name, String username, Long beybladeId) {
+    public Lobby create(String name, String username, Long beybladeId) {
+        return create(name, username, beybladeId, FightMode.CLASSIC);
+    }
+
+    public synchronized Lobby create(String name, String username, Long beybladeId, FightMode mode) {
         String trimmed = name == null ? "" : name.trim();
         if (trimmed.length() < 3 || trimmed.length() > 30) {
             throw badRequest("Der Lobby-Name muss 3–30 Zeichen lang sein.");
@@ -44,7 +51,7 @@ public class LobbyService {
         if (hasActive) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Du hast schon eine offene Lobby.");
         }
-        Lobby lobby = new Lobby(newId(), trimmed, username, beybladeId);
+        Lobby lobby = new Lobby(newId(), trimmed, username, beybladeId, mode);
         lobbies.put(lobby.getId(), lobby);
         return lobby;
     }
@@ -77,7 +84,8 @@ public class LobbyService {
         return lobby;
     }
 
-    public synchronized BattleResult start(String id, String username) {
+    /** Startet den Freundschaftskampf als PvP-Match: beide spinnen an, beide lösen ihre Ult selbst aus. */
+    public synchronized Lobby start(String id, String username) {
         Lobby lobby = get(id);
         if (!lobby.getHost().equals(username)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Nur der Host kann den Kampf starten.");
@@ -85,13 +93,13 @@ public class LobbyService {
         if (lobby.getStatus() != LobbyStatus.READY) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Es fehlt noch ein Mitspieler.");
         }
-        User host = users.get(lobby.getHost());
-        User guest = users.get(lobby.getGuest());
-        BattleResult result = battles.fight(
-                host, beyblades.owned(host, lobby.getHostBeybladeId()),
-                guest, beyblades.owned(guest, lobby.getGuestBeybladeId()));
-        lobby.finish(result.getId());
-        return result;
+        String matchId = lobby.getMode() == FightMode.ARENA
+                ? rooms.createPvp(lobby.getHost(), lobby.getHostBeybladeId(), lobby.getGuest(),
+                        lobby.getGuestBeybladeId())
+                : matches.createPvpMatch(lobby.getHost(), lobby.getHostBeybladeId(),
+                        lobby.getGuest(), lobby.getGuestBeybladeId(), null);
+        lobby.start(matchId);
+        return lobby;
     }
 
     public synchronized void leave(String id, String username) {

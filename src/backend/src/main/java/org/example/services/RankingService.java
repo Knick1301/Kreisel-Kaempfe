@@ -93,6 +93,12 @@ public class RankingService {
         if (!isBot(loser)) loser.setXp(xp(loser) + XP_LOSS * xpFactor);
     }
 
+    /** Nur XP, keine Liga-Punkte (Cup-Kämpfe: sonst ließen sich LP gegen schwache Cup-Gegner farmen). */
+    public void applyXpOnly(BattleResult r) {
+        if (!isBot(r.getWinner())) r.getWinner().setXp(xp(r.getWinner()) + XP_WIN);
+        if (!isBot(r.getLoser())) r.getLoser().setXp(xp(r.getLoser()) + XP_LOSS);
+    }
+
     public RankDto rankOf(User user) {
         return rankOf(rating(user), xp(user));
     }

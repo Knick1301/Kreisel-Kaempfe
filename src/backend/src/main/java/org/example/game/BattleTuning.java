@@ -17,13 +17,13 @@ public final class BattleTuning {
     private BattleTuning() {}
 
     /** Version der Simulation. Bei jeder Änderung an Formeln oder Konstanten erhöhen. */
-    public static final int SIM_VERSION = 6;
+    public static final int SIM_VERSION = 7;
     /**
-     * Versionen, deren Kämpfe die aktuelle Simulation exakt nachspielt. Version 6 hat die Grundwerte neu
+     * Versionen, deren Kämpfe die aktuelle Simulation exakt nachspielt. Version 6 und 7 haben die Grundwerte neu
      * eingestellt (weniger Reibung, mehr Clashes, stärkere Ults), ältere Kämpfe behalten ihr Ergebnis, aber
      * keine Animation mehr.
      */
-    public static final Set<Integer> REPLAYABLE_VERSIONS = Set.of(6);
+    public static final Set<Integer> REPLAYABLE_VERSIONS = Set.of(7);
     /** Ab dieser Version gibt es Ults. */
     public static final int ULTS_SINCE = 3;
     /** Ab dieser Version gilt {@link #TORNADO_FRICTION}. */
@@ -152,7 +152,7 @@ public final class BattleTuning {
     /** Anteil von HIT, den der Verteidiger bei einer Abwehr trotzdem verliert. */
     public static final double DEFLECT_DEFENDER_LOSS = 0.15;
     /** Spinverlust des Getroffenen bei einem Volltreffer. */
-    public static final double HIT = 0.09;
+    public static final double HIT = 0.08;
     /** Verteidigung dämpft Volltreffer. */
     public static final double ABSORB = 0.45;
     /** Anteil von HIT, den der Angreifer bei einem Volltreffer selbst verliert. */
@@ -161,10 +161,10 @@ public final class BattleTuning {
     // ---------------------------------------------------------------- KOs
 
     /** Burst-Chance pro Volltreffer = BASE · I² · (1 − RESIST · BR) · (1 + FRAGILITY · Ausdauer-Anteil) · Low-Energy. */
-    public static final double BURST_BASE = 0.14;
+    public static final double BURST_BASE = 0.32;
     public static final double BURST_RESIST = 0.7;
     /** Ausdauer-Kreisel sind locker gebaut und bursten leichter. */
-    public static final double FRAGILITY = 0.45;
+    public static final double FRAGILITY = 0.6;
     /** KO-Chancen steigen bei wenig Energie: · (1 + LOW_ENERGY_KO · (1 − E)). */
     public static final double LOW_ENERGY_KO = 2.0;
     /** Ring-Out-Chance pro Volltreffer = BASE · I² · (WEIGHT − Gewicht) · (1 − DEFENSE · Verteidigung) · Low-Energy. */
@@ -219,7 +219,7 @@ public final class BattleTuning {
     public static final double SHIELD_DEFLECT_MAX = 0.95;
     public static final double SHIELD_RECOIL = 1.0;
     /** Der Schild verankert den Kreisel: Reibung · FRICTION (hilft auch gegen Gegner, die kaum angreifen). */
-    public static final double SHIELD_FRICTION = 0.44;
+    public static final double SHIELD_FRICTION = 0.38;
 
     /** Ansturm: Dauer · Stärke. */
     public static final int RUSH_MS = 4_500;

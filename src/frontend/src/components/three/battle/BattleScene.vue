@@ -56,6 +56,8 @@ const props = defineProps<{
   calm: boolean
   /** nur Seite A zeigen (Vorschau vor dem Kampf) */
   solo?: boolean
+  /** bekommt jedes Frame die Kamera-Blickrichtung (Steuerung im Arena-Modus), siehe `CameraView.yaw` */
+  cameraYaw?: (yaw: number) => void
 }>()
 
 const BG = '#0a0a0b'
@@ -434,6 +436,9 @@ onBeforeRender(({ delta }) => {
     cam.lookAt(tmpPos)
     controls.target.copy(tmpPos)
   }
+  props.cameraYaw?.(
+    Math.atan2(cam.position.x - controls.target.x, cam.position.z - controls.target.z),
+  )
 })
 </script>
 

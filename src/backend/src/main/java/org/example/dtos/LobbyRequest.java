@@ -1,3 +1,4 @@
 package org.example.dtos;
 
-public record LobbyRequest(String name, Long beybladeId) {}
+/** @param mode CLASSIC (Standard) oder ARENA (Echtzeit-Physik), nur beim Erstellen */
+public record LobbyRequest(String name, Long beybladeId, String mode) {}

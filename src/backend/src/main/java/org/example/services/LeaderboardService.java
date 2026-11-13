@@ -44,10 +44,12 @@ public class LeaderboardService {
         long botWins = results.countBotWins(username);
         long botLosses = results.countBotLosses(username);
         int winRate = pvp[0] + pvp[1] == 0 ? 0 : (int) Math.round(100.0 * pvp[0] / (pvp[0] + pvp[1]));
-        var rank = users.findByUsername(username).map(ranking::rankOf)
+        var user = users.findByUsername(username);
+        var rank = user.map(ranking::rankOf)
                 .orElseGet(() -> RankingService.rankOf(RankingService.START_RATING, 0));
+        int cups = user.map(User::getCupsWon).orElse(0);
         return new PlayerStatsDto(username, pvp[0], pvp[1], winRate, me == null ? null : me.rank(),
-                botWins, botLosses, rank);
+                botWins, botLosses, rank, null, 0, 0, null, cups);
     }
 
     List<LeaderboardEntry> ranking() {

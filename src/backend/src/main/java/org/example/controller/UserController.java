@@ -5,6 +5,7 @@ import org.example.dtos.BattleReportDto;
 import org.example.dtos.BeybladeDto;
 import org.example.dtos.BeybladeRequest;
 import org.example.dtos.PlayerStatsDto;
+import org.example.services.ArenaService;
 import org.example.services.BattleService;
 import org.example.services.BeybladeService;
 import org.example.services.LeaderboardService;
@@ -30,16 +31,19 @@ public class UserController {
     private final BeybladeService beyblades;
     private final LeaderboardService leaderboard;
     private final BattleService battles;
+    private final ArenaService arena;
 
-    public UserController(BeybladeService beyblades, LeaderboardService leaderboard, BattleService battles) {
+    public UserController(BeybladeService beyblades, LeaderboardService leaderboard, BattleService battles,
+                          ArenaService arena) {
         this.beyblades = beyblades;
         this.leaderboard = leaderboard;
         this.battles = battles;
+        this.arena = arena;
     }
 
     @GetMapping("/stats")
     public PlayerStatsDto stats(@RequestAttribute(AuthInterceptor.USERNAME) String username) {
-        return leaderboard.stats(username);
+        return leaderboard.stats(username).withArena(arena.standing(username));
     }
 
     @GetMapping("/battles")

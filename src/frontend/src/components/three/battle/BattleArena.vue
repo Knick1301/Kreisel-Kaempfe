@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { cappedDpr } from '@/components/three/dpr'
 import { shallowRef } from 'vue'
 import { TresCanvas } from '@tresjs/core'
 import type { BattleReport, Side } from '@/api'
@@ -16,20 +17,25 @@ defineProps<{
   solo?: boolean
   /** eigene Seite: färbt die Treffer-Anzeigen (gut/schlecht) */
   me?: Side | null
+  /** bekommt jedes Frame die Kamera-Blickrichtung (Steuerung im Arena-Modus) */
+  cameraYaw?: (yaw: number) => void
 }>()
 
 const marks = shallowRef<InstanceType<typeof HitMarks>>()
+
+const dpr = cappedDpr()
 </script>
 
 <template>
   <div class="battle-stage" @contextmenu.prevent>
-    <TresCanvas alpha :clear-alpha="0" :dpr="[1, 1.5]">
+    <TresCanvas alpha :clear-alpha="0" :dpr="dpr">
       <BattleScene
         :report="report"
         :choreo="choreo"
         :clock="clock"
         :calm="calm"
         :solo="solo ?? false"
+        :camera-yaw="cameraYaw"
         @hit="(c, x, y) => marks?.add(c, x, y)"
       />
     </TresCanvas>

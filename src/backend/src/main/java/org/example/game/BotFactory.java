@@ -33,7 +33,15 @@ public final class BotFactory {
     private static final int[] MAX = {ATTACK_REF, DEFENSE_REF, STAMINA_REF};
 
     public static Bot create(BeybladeStats player, Random rng) {
-        double playerBudget = StyleVector.of(player).budget();
+        return create(player, rng, 1);
+    }
+
+    /**
+     * @param strength Faktor auf das Stat-Budget des Spielers: 1 = gleich stark, darüber stärkere Teile
+     *                 (Cup-Gegner späterer Runden). Die Teile-Grenzen gelten weiterhin.
+     */
+    public static Bot create(BeybladeStats player, Random rng, double strength) {
+        double playerBudget = StyleVector.of(player).budget() * strength;
         double target = clamp(playerBudget * (1 + BOT_BUDGET_SPREAD * (2 * rng.nextDouble() - 1)),
                 normSum(MIN), normSum(MAX));
 

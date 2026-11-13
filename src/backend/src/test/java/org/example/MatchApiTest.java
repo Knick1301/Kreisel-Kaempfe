@@ -245,6 +245,112 @@ class MatchApiTest {
         assertEquals(before + 1, after, "Abbrechen per Neustart darf keine Niederlage verhindern");
     }
 
+    private JsonNode getMatch(String auth, String id) throws Exception {
+        return json.readTree(mvc.perform(get("/api/matches/" + id).header("Authorization", auth))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+
+    /** Zwei Spieler, Lobby, Start: Match-ID für beide. */
+    private String pvpViaLobby(String host, long hostBey, String guest, long guestBey) throws Exception {
+        String lobbyId = json.readTree(mvc.perform(post("/api/lobbies").header("Authorization", host)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Duell\",\"beybladeId\":" + hostBey + "}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("id").asText();
+        mvc.perform(post("/api/lobbies/" + lobbyId + "/join").header("Authorization", guest)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"beybladeId\":" + guestBey + "}"))
+                .andExpect(status().isOk());
+        JsonNode started = json.readTree(mvc.perform(post("/api/lobbies/" + lobbyId + "/start")
+                        .header("Authorization", host))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        // der Gast sieht die Match-ID beim nächsten Abfragen der Lobby
+        JsonNode seen = json.readTree(mvc.perform(get("/api/lobbies/" + lobbyId).header("Authorization", guest))
+                .andReturn().getResponse().getContentAsString());
+        assertEquals(started.get("matchId").asText(), seen.get("matchId").asText());
+        return started.get("matchId").asText();
+    }
+
+    @Test
+    void pvpUeberLobbyBeideSpinnenAnUltUndWertungErstWennBeideFertig() throws Exception {
+        String host = register("duell1");
+        String guest = register("duell2");
+        long hostBey = buildBeyblade(host);
+        long guestBey = buildBeyblade(guest);
+
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String id = pvpViaLobby(host, hostBey, guest, guestBey);
+            JsonNode forGuest = getMatch(guest, id);
+            assertEquals("PVP", forGuest.get("mode").asText());
+            assertEquals("B", forGuest.get("yourSide").asText());
+            assertFalse(forGuest.get("fighters").get(1).get("bot").asBoolean());
+
+            // Der Host spinnt an: noch kein Kampf, weil der Gast fehlt
+            JsonNode afterHost = launch(host, id, "{\"taps\":[700],\"pull\":0.8,\"speed\":0.7}");
+            assertEquals("LAUNCH", afterHost.get("status").asText());
+            assertFalse(afterHost.get("opponentReady").asBoolean());
+            JsonNode afterGuest = launch(guest, id, "{\"taps\":[700],\"pull\":0.8,\"speed\":0.7}");
+            assertEquals("FIGHT", afterGuest.get("status").asText());
+            int version = afterGuest.get("version").asInt();
+
+            // Ult des Gasts (Seite B) suchen
+            int ready = -1;
+            for (JsonNode e : afterGuest.get("report").get("timeline").get("events")) {
+                if ("ULT_READY".equals(e.get("type").asText()) && "B".equals(e.get("side").asText())) {
+                    ready = e.get("t").asInt();
+                    break;
+                }
+            }
+            int duration = afterGuest.get("report").get("durationMs").asInt();
+            if (ready < 0 || ready + 600 >= duration) {
+                finish(host, id);
+                finish(guest, id);
+                continue;
+            }
+            ult(guest, id, ready + 200).andExpect(status().isOk());
+
+            // Der Host erkennt die Änderung an der Version und sieht die Ult von B im Verlauf
+            JsonNode hostView = getMatch(host, id);
+            assertEquals(version + 1, hostView.get("version").asInt());
+            boolean seen = false;
+            for (JsonNode e : hostView.get("report").get("timeline").get("events")) {
+                if ("ULT".equals(e.get("type").asText()) && "B".equals(e.get("side").asText())) seen = true;
+            }
+            assertTrue(seen, "Host muss die Ult des Gasts sehen");
+
+            // Erst wenn beide fertig sind, wird gewertet
+            assertEquals("FIGHT", finish(host, id).get("status").asText());
+            JsonNode done = finish(guest, id);
+            assertEquals("DONE", done.get("status").asText());
+            assertEquals("PVP", done.get("report").get("mode").asText());
+            assertTrue(done.get("report").has("ratingDeltaWinner"));
+            return;
+        }
+        throw new AssertionError("Kein Kampf, in dem die Ult des Gasts rechtzeitig voll wurde");
+    }
+
+    @Test
+    void spielersuchePaartZweiSpieler() throws Exception {
+        String a = register("sucher1");
+        String b = register("sucher2");
+        long beyA = buildBeyblade(a);
+        long beyB = buildBeyblade(b);
+
+        JsonNode first = json.readTree(mvc.perform(post("/api/matchmaking").header("Authorization", a)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"beybladeId\":" + beyA + "}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals("WAITING", first.get("state").asText());
+
+        JsonNode second = json.readTree(mvc.perform(post("/api/matchmaking").header("Authorization", b)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"beybladeId\":" + beyB + "}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals("FOUND", second.get("state").asText());
+
+        JsonNode firstNow = json.readTree(mvc.perform(get("/api/matchmaking").header("Authorization", a))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals("FOUND", firstNow.get("state").asText());
+        assertEquals(second.get("matchId").asText(), firstNow.get("matchId").asText());
+        assertEquals("PVP", getMatch(a, firstNow.get("matchId").asText()).get("mode").asText());
+    }
+
     @Test
     void unbekannteArenaUndFremderKreiselWerdenAbgelehnt() throws Exception {
         String auth = register("spinner6");

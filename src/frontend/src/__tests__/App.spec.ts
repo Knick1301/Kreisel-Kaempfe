@@ -45,7 +45,8 @@ describe('HomeView', () => {
     expect(wrapper.text()).toContain('Dein Beyblade')
     expect(wrapper.text()).toContain('Beyblade1')
     expect(wrapper.text()).toContain('79')
-    expect(wrapper.findAll('button.mode')).toHaveLength(3)
+    expect(wrapper.findAll('button.mode')).toHaveLength(4)
+    expect(wrapper.text()).toContain('Arena-Modus')
   })
 
   it('meldet, wenn das Backend nicht erreichbar ist', async () => {

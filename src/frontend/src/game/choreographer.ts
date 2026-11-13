@@ -11,7 +11,7 @@ import {
 } from './arenas'
 import { frameToWorld } from './launch'
 import { range, seededStream } from './prng'
-import { clamp, displayEnergy, isDeflected, other, smoothstep } from './playback'
+import { clamp, displayEnergy, isDeflected, other, smoothstep, ultWindows } from './playback'
 
 /**
  * Deterministischer Choreograf: erzeugt aus Seed + Timeline die Bahnen beider Kreisel.
@@ -43,6 +43,11 @@ const MAX_CLASH_R = 2.2
 const APPROACH_S = 0.65
 const RETURN_S = 0.9
 const BOUNCE = 0.95
+/** Ansturm: so viel schneller kreist der Kreisel, so viel weiter schwingt seine Bahn aus */
+const RUSH_SPEED = 2.2
+const RUSH_SWING = 1.3
+/** Ein- und Auslauf des Ansturm-Tempos */
+const RUSH_EASE_MS = 200
 /** Ruhehöhe der drei Teile über der Spitze (Wheel, Track, Tip). */
 export const PART_HEIGHTS = [0.5, 0.3, 0.1] as const
 
@@ -235,6 +240,20 @@ export function createChoreography(report: BattleReport): Choreography {
     for (let k = 0; k < n; k++) energy[s][k] = displayEnergy(report, s, k / SAMPLES_PER_MS)
   }
 
+  // ---------------------------------------------------------------- Ansturm: schneller und weiter
+  // Während RUSH rast der Kreisel deutlich schneller und in weiteren Bögen; Ein- und Auslauf weich.
+  const rushes = ultWindows(events).filter((w) => w.ult === 'RUSH')
+  const rushAt = (s: Side, tMs: number) => {
+    let v = 0
+    for (const w of rushes) {
+      if (w.side !== s) continue
+      const fadeIn = smoothstep((tMs - w.start) / RUSH_EASE_MS)
+      const fadeOut = 1 - smoothstep((tMs - w.end) / RUSH_EASE_MS)
+      v = Math.max(v, Math.min(fadeIn, fadeOut))
+    }
+    return v
+  }
+
   // ---------------------------------------------------------------- freie Bahn (polar)
   const r: Record<Side, Float64Array> = { A: new Float64Array(n), B: new Float64Array(n) }
   const th: Record<Side, Float64Array> = { A: new Float64Array(n), B: new Float64Array(n) }
@@ -290,6 +309,11 @@ export function createChoreography(report: BattleReport): Choreography {
         radius *= 0.55 + 0.45 * Math.min(1, e / 0.35)
       }
       omega *= 0.35 + 0.65 * Math.sqrt(e)
+      const rush = rushes.length ? rushAt(s, t * 1000) : 0
+      if (rush > 0) {
+        omega *= 1 + (RUSH_SPEED - 1) * rush
+        radius = p.rMean + (radius - p.rMean) * (1 + (RUSH_SWING - 1) * rush)
+      }
       if (k > 0) theta += dir * omega * DT
       r[s][k] = clamp(radius, 0.3, play - 0.05)
       th[s][k] = theta

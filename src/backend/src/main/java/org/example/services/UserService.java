@@ -57,6 +57,11 @@ public class UserService {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "User " + username + " nicht gefunden"));
     }
 
+    /** Spieler per Name, Groß-/Kleinschreibung egal (Freunde hinzufügen). */
+    public java.util.Optional<User> findByNameIgnoreCase(String username) {
+        return users.findByUsernameIgnoreCase(username);
+    }
+
     private static ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }

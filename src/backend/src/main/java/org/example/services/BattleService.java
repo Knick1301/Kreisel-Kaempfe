@@ -155,10 +155,23 @@ public class BattleService {
     /** Vorläufigen Kampf speichern und Liga-Punkte und XP verbuchen. */
     @Transactional
     public BattleResult commit(BattleResult r) {
+        return commit(r, true);
+    }
+
+    /** @param ranked {@code false}: nur XP, keine Liga-Punkte (Cup) */
+    @Transactional
+    public BattleResult commit(BattleResult r, boolean ranked) {
         r.setWinner(users.findById(r.getWinner().getId()).orElseThrow());
         r.setLoser(users.findById(r.getLoser().getId()).orElseThrow());
-        ranking.apply(r);
+        if (ranked) ranking.apply(r);
+        else ranking.applyXpOnly(r);
         return results.save(r);
+    }
+
+    /** KI-Gegner mit vorgegebener Stärke (Cup): Faktor aufs Stat-Budget des Spielers. */
+    public FighterSnapshot drawBot(BeybladeStats playerStats, double strength) {
+        BotFactory.Bot generated = BotFactory.create(playerStats, random, strength);
+        return FighterSnapshot.bot(botUser().getUsername(), generated.name(), generated.stats(), generated.accent());
     }
 
     @Transactional
