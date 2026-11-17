@@ -234,6 +234,8 @@ let raf = 0
 let lastCount: number | null = null
 let ultReadyPlayed = false
 let resultShown = false
+/** Lokale Zeit (performance.now), zu der das Finish in der Darstellung erreicht wurde. */
+let finishSeenAt: number | undefined
 
 function connect(roomId: string) {
   remote?.close()
@@ -257,6 +259,7 @@ function connect(roomId: string) {
   }
   rem.connect()
   resultShown = false
+  finishSeenAt = undefined
   cancelAnimationFrame(raf)
   raf = requestAnimationFrame(frame)
 }
@@ -307,21 +310,26 @@ function frame(now: number) {
     if (st.status === 'FIGHT' || st.status === 'DONE') ensureLive()
   }
   if (live) {
-    const t = rem.update(now)
+    const serverT = rem.update(now)
+    if (finishSeenAt === undefined && live.finishMs < Number.POSITIVE_INFINITY && serverT >= live.finishMs)
+      finishSeenAt = now
+    // Nach dem Finish schickt der Server keine Stände mehr, die Server-Zeit bleibt stehen.
+    // Die Uhr läuft dann lokal weiter, damit Burst-Teile, Ring-Out-Sturz und Umkippen abgespielt werden.
+    const t =
+      finishSeenAt === undefined ? serverT : Math.max(serverT, live.finishMs + (now - finishSeenAt))
     clock.seek(Math.max(clock.t, t))
-    record(t)
-    sendInput()
-    updateHud(rem, t)
+    record(serverT)
+    if (finishSeenAt === undefined) sendInput()
+    updateHud(rem, serverT)
     updateHum(rem)
-    if (live.finishMs < Number.POSITIVE_INFINITY && clock.t >= live.finishMs) {
+    if (finishSeenAt !== undefined) {
       spinHum.stop()
       // Ausklingen lassen (Burst-Teile, Umkippen), dann das Ergebnis zeigen
-      if (!resultShown && now - (finishSeenAt ??= now) > 2600) void showResult()
+      if (!resultShown && now - finishSeenAt > 2600) void showResult()
     }
   }
   raf = requestAnimationFrame(frame)
 }
-let finishSeenAt: number | undefined
 
 async function showResult() {
   resultShown = true
