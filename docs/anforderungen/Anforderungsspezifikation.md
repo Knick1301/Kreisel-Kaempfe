@@ -114,7 +114,8 @@ Das Sequenzdiagramm „Lobby erstellen oder suchen“ zeigt folgenden Ablauf (Up
 **Als Spieler** möchte ich die Rangliste ansehen können, um zu sehen, wie ich im Vergleich zu anderen Spielern abschneide.
 
 **Akzeptanzkriterien:**
-- Die Spieler werden nach Anzahl ihrer Siege sortiert angezeigt.
+- Die Spieler werden nach Liga-Punkten sortiert angezeigt (bei Gleichstand nach Siegen), mit Liga, Division und Bilanz.
+- Liga-Punkte entstehen aus Kämpfen (Elo): Kämpfe gegen echte Spieler zählen voll, Kämpfe gegen die KI reduziert und nur bis zur Gold-Liga.
 - Der Spieler sieht seine eigene Platzierung.
 - Gibt es noch keine Kampfergebnisse, wird der Hinweis „Noch keine Kämpfe“ angezeigt.
 
