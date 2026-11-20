@@ -29,7 +29,6 @@ flowchart TD
 | Qualitätsattribut | Verfeinerung | Qualitätsszenario (Kurzform) | GNut | TRis |
 |---|---|---|---|---|
 | Leistungsfähigkeit | Reaktionszeit der Lobby | **QS-01:** Lobby bei normaler Last innerhalb von 2 s erstellen oder betreten | Hoch | Mittel |
-| Leistungsfähigkeit | Reaktionszeit der Rangliste | **QS-10:** Rangliste mit 1.000 gespeicherten Ergebnissen innerhalb von 2 s laden | Mittel | Mittel |
 | Zuverlässigkeit | Konsistenz des Lobbyzustands | **QS-02:** Zwei gleichzeitige Beitritte auf den letzten Platz führen zu genau einer erfolgreichen Aufnahme | **Hoch** | **Hoch** |
 | Zuverlässigkeit | Korrekte Ergebnisverarbeitung | **QS-03:** Wiederholt gesendetes Kampfergebnis verändert die Rangliste nur einmal | **Hoch** | **Hoch** |
 | Zuverlässigkeit | Umgang mit Netzwerkfehlern | **QS-04:** Unterbrechung wird erkannt und angezeigt; kein ungültiger Matchstart | Hoch | Mittel |
@@ -38,6 +37,7 @@ flowchart TD
 | Sicherheit | Berechtigungsprüfung | **QS-07:** Fremde Kreisel und Kampfergebnisse lassen sich nicht unbefugt ändern | Hoch | Hoch |
 | Benutzbarkeit | Baukasten-Bedienung | **QS-08:** Neue Spielende können ohne Anleitung einen vollständigen Kreisel erstellen | Hoch | Niedrig |
 | Benutzbarkeit | Freunde-Funktion | **QS-09:** Eine Freundesanfrage lässt sich schnell und verständlich senden | Mittel | Niedrig |
+| Leistungsfähigkeit | Reaktionszeit der Rangliste | **QS-10:** Rangliste mit 1.000 gespeicherten Ergebnissen innerhalb von 2 s laden | Mittel | Mittel |
 
 ## 2. Vollständige Qualitätsszenarien
 
