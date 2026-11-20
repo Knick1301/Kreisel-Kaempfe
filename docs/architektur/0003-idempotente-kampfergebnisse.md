@@ -1,8 +1,4 @@
-# ADR-0003: Kampfergebnisse nur einmal speichern und werten
-
-- **Datum:** 20.11.2026
-- **Status:** Vorgeschlagen – vom Team zu bestätigen
-- **Qualitätsszenario:** QS-03 (hoher geschäftlicher Nutzen, hohes technisches Risiko)
+# ADR-3: Kampfergebnisse nur einmal speichern und werten
 
 ## Kontext
 
