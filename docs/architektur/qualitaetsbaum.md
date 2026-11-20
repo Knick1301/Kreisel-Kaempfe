@@ -1,14 +1,8 @@
-# Qualitätsbaum (Utility Tree) – Kreisel-Kämpfe
-
-**Projekt:** Kreisel-Kämpfe  
-**Stand:** 20.11.2026  
-**Zweck:** Ermittlung und Priorisierung architektonisch wichtiger Anforderungen (ASRs) nach dem dreistufigen Vorgehen aus der Vorlesung.
+# Qualitätsbaum 
 
 ## 1. Ausgangslage und Abgrenzung
 
 Das Projekt umfasst nach dem bisherigen Entwurf insbesondere das Zusammenstellen von Kreiseln, Lobby erstellen/finden, Kämpfe sowie die Anzeige einer Rangliste. Der aktuelle Blogbeitrag zeigt außerdem eine Kampfdarstellung, eine Lobby-Ansicht, den Solo-Cup/Turnierbereich und einen Bereich für Freunde bzw. Anfragen.
-
-**Wichtig:** Die folgenden Antwortmaße sind **vereinbarte Zielwerte für Entwurf und Tests**, keine Aussagen über schon gemessene oder implementierte Leistungen. Die Zahlen können vom Team nach einem Prototypentest angepasst werden.
 
 ## 2. Qualitätsbaum
 
