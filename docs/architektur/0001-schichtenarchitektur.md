@@ -1,8 +1,4 @@
-# ADR-0001: Oberfläche, Logik und Datenzugriff trennen
-
-- **Datum:** 20.11.2026
-- **Status:** Im bisherigen Architekturentwurf vorgesehen
-- **Qualitätsszenarien:** QS-05, QS-06; unterstützt auch QS-02 und QS-03
+# ADR-1: Oberfläche, Logik und Datenzugriff trennen
 
 ## Kontext
 
