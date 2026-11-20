@@ -1,10 +1,6 @@
 # Qualitätsbaum 
 
-## 1. Ausgangslage und Abgrenzung
-
-Das Projekt umfasst nach dem bisherigen Entwurf insbesondere das Zusammenstellen von Kreiseln, Lobby erstellen/finden, Kämpfe sowie die Anzeige einer Rangliste. Der aktuelle Blogbeitrag zeigt außerdem eine Kampfdarstellung, eine Lobby-Ansicht, den Solo-Cup/Turnierbereich und einen Bereich für Freunde bzw. Anfragen.
-
-## 2. Qualitätsbaum
+## 1. Qualitätsbaum
 
 ```mermaid
 flowchart TD
@@ -43,7 +39,7 @@ flowchart TD
 | Benutzbarkeit | Baukasten-Bedienung | **QS-08:** Neue Spielende können ohne Anleitung einen vollständigen Kreisel erstellen | Hoch | Niedrig |
 | Benutzbarkeit | Freunde-Funktion | **QS-09:** Eine Freundesanfrage lässt sich schnell und verständlich senden | Mittel | Niedrig |
 
-## 3. Vollständige Qualitätsszenarien
+## 2. Vollständige Qualitätsszenarien
 
 Jedes Szenario folgt dem Schema **Quelle – Auslöser – Artefakt – Umgebung – Antwort – Antwortmaß**.
 
@@ -127,7 +123,7 @@ Jedes Szenario folgt dem Schema **Quelle – Auslöser – Artefakt – Umgebung
 - **Antwort:** Die Rangliste wird aus den vorhandenen Ergebnissen geladen und angezeigt.
 - **Antwortmaß:** In mindestens **95 %** von 100 Abrufen wird die Rangliste innerhalb von **2 Sekunden** angezeigt.
 
-## 4. Für Schritt 2 ausgewählte Szenarien
+## 3. Für Schritt 2 ausgewählte Szenarien
 
 **Höchste Priorität:**
 1. **QS-02 – Konsistenter Lobby-Beitritt** (hoher Nutzen / hohes technisches Risiko). Ohne verlässliche Teilnehmerverwaltung funktionieren Mehrspieler-Kämpfe nicht zuverlässig.
