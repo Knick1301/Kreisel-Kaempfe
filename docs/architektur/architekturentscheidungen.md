@@ -8,7 +8,7 @@
 
 ## Architekturentscheidungen
 
-| Entscheidung | Begründung | ADR |
+| Entscheidung | Begründung | 
 |---|---|
 | **View → Controller → Service → Repository** | Klare Trennung von Oberfläche, Logik und Daten; erleichtert Änderungen und Tests. |
 | **Lobbyverwaltung im `LobbyService`** | Verhindert Überbelegung bei gleichzeitigen Beitritten. |
