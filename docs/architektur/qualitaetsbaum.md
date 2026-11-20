@@ -83,45 +83,7 @@ Jedes Szenario folgt dem Schema **Quelle – Auslöser – Artefakt – Umgebung
 - **Antwort:** Das neue Teil wird mit seinen Werten aufgenommen und im Baukasten angeboten.
 - **Antwortmaß:** Das Ergänzen eines Teils dauert höchstens **2 Stunden** und erfordert **keine Änderung** der Lobby-, Ergebnis- oder Ranglistenlogik.
 
-### QS-06: Neue Turniervariante ergänzen
-- **Quelle:** Entwickler.
-- **Auslöser:** Für den Solo-Cup wird eine zusätzliche Turniervariante bzw. ein anderer Turnierablauf benötigt.
-- **Artefakt:** Turniersteuerung und bestehende Kampfauswertung.
-- **Umgebung:** Weiterentwicklung nach dem ersten spielbaren Turnierablauf.
-- **Antwort:** Der neue Ablauf kann auf die bestehende Kampfauswertung zurückgreifen.
-- **Antwortmaß:** Eine neue, vergleichbar komplexe Variante lässt sich innerhalb von **2 Personentagen** ergänzen, ohne die grundlegende Ergebnislogik des einzelnen Kampfes zu verändern.
-
-### QS-07: Unbefugte Änderungen verhindern
-- **Quelle:** Angemeldeter Benutzer bzw. manipulierter Client.
-- **Auslöser:** Der Client versucht, den Kreisel eines anderen Spielers zu verändern oder ein nicht autorisiertes Kampfergebnis einzutragen.
-- **Artefakt:** Controller-/Service-Berechtigungsprüfung und Datenhaltung.
-- **Umgebung:** Normalbetrieb mit gültiger Anmeldung, aber ohne Rechte für die angeforderte Änderung.
-- **Antwort:** Die Änderung wird verweigert und bestehende Daten bleiben unverändert.
-- **Antwortmaß:** In **20 von 20** negativen Berechtigungstests werden unzulässige Änderungen abgelehnt und **0** fremde Datensätze verändert.
-
-### QS-08: Kreisel ohne Anleitung erstellen
-- **Quelle:** Neuer Spieler.
-- **Auslöser:** Er öffnet erstmals den Kreisel-Baukasten.
-- **Artefakt:** Baukastenansicht und Kreisel-Erstellungsprozess.
-- **Umgebung:** Erster Nutzungsversuch ohne persönliche Einführung.
-- **Antwort:** Der Spieler kann die benötigten Einzelteile auswählen, seine Werte sehen und den Kreisel speichern.
-- **Antwortmaß:** Mindestens **4 von 5** Testpersonen erstellen in **höchstens 3 Minuten** selbstständig einen vollständigen Kreisel.
-
-### QS-09: Freundesanfrage senden
-- **Quelle:** Angemeldeter Spieler.
-- **Auslöser:** Er möchte einen anderen Spieler als Freund hinzufügen.
-- **Artefakt:** Freunde-Ansicht und Anfrageverwaltung.
-- **Umgebung:** Normalbetrieb; der Zielspieler ist über die Suche auffindbar.
-- **Antwort:** Der Spieler findet den Zielspieler, sendet eine Einladung und erhält sichtbares Feedback.
-- **Antwortmaß:** Mindestens **4 von 5** Testpersonen erledigen die Aufgabe in **höchstens 60 Sekunden** ohne Hilfe.
-
-### QS-10: Rangliste zügig anzeigen
-- **Quelle:** Angemeldeter Spieler.
-- **Auslöser:** Er öffnet die Rangliste.
-- **Artefakt:** Ranglistenansicht, zugehöriger Service und Ergebnisablage.
-- **Umgebung:** Testsystem mit **1.000** gespeicherten Kampfergebnissen.
-- **Antwort:** Die Rangliste wird aus den vorhandenen Ergebnissen geladen und angezeigt.
-- **Antwortmaß:** In mindestens **95 %** von 100 Abrufen wird die Rangliste innerhalb von **2 Sekunden** angezeigt.
+Aus Zeitgründen wurden zunächst nur die ersten 5 Szenarien präziser ausgearbeitet.
 
 ## 3. Für Schritt 2 ausgewählte Szenarien
 
