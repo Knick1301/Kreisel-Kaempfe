@@ -1,8 +1,4 @@
-# ADR-0002: Lobbyzustand zentral und konsistent verändern
-
-- **Datum:** 20.11.2026
-- **Status:** Vorgeschlagen – vom Team zu bestätigen
-- **Qualitätsszenario:** QS-02 (hoher geschäftlicher Nutzen, hohes technisches Risiko)
+# ADR-2: Lobbyzustand zentral und konsistent verändern
 
 ## Kontext
 
