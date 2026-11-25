@@ -13,7 +13,10 @@
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache",
-    "format": "prettier --write --experimental-cli src/"
+    "format": "prettier --write --experimental-cli src/",
+    "ci": "run-s ci:lint ci:test build",
+    "ci:lint": "oxlint . && eslint .",
+    "ci:test": "vitest run"
   },
   "dependencies": {
     "@tresjs/cientos": "^5.10.0",
