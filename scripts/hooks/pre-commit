@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Git pre-commit hook: prüft vor jedem Commit den Linter des Frontends,
+# damit Stilfehler gar nicht erst in der CI-Pipeline landen.
+#
+# Einmalig aktivieren:   git config core.hooksPath scripts/hooks
+# Im Notfall umgehen:    git commit --no-verify
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+if git diff --cached --name-only | grep -q '^src/frontend/'; then
+  if [ ! -d "$ROOT/src/frontend/node_modules" ]; then
+    echo "pre-commit: node_modules fehlt – bitte zuerst 'npm ci' in src/frontend ausführen" >&2
+    exit 1
+  fi
+  echo "pre-commit: Frontend-Linter läuft …"
+  (cd "$ROOT/src/frontend" && npm run --silent ci:lint) || {
+    echo "pre-commit: Linter-Fehler – Commit abgebrochen (Tipp: 'npm run lint' behebt vieles automatisch)" >&2
+    exit 1
+  }
+fi

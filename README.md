@@ -1,5 +1,7 @@
 # Kreisel-Kämpfe
 
+[![CI/CD](https://github.com/Knick1301/Kreisel-Kaempfe/actions/workflows/ci.yml/badge.svg)](https://github.com/Knick1301/Kreisel-Kaempfe/actions/workflows/ci.yml)
+
 Ein Online-Multiplayer-Spiel, in dem Spieler ihre eigenen Kampfkreisel zusammenstellen und in einer Arena gegeneinander antreten.
 
 Projekt im Rahmen der Vorlesung **Software Engineering** (3. und 4. Semester) an der DHBW Karlsruhe.
@@ -23,7 +25,32 @@ Projekt im Rahmen der Vorlesung **Software Engineering** (3. und 4. Semester) an
 
 ## Tech-Stack
 
-Vue + Tailwind.css, Java-Backend, H2-Database, Test-Framework und CI/CD stehen noch aus_
+Vue 3 + Vite (Frontend), Java 21 / Spring Boot (Backend), H2-Datenbank, Vitest + JUnit (Tests), GitHub Actions + Docker (CI/CD)
+
+## CI/CD
+
+Bei jedem Push und bei jedem Pull Request nach `main` läuft die Pipeline [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+
+| Job | Was passiert |
+|-----|--------------|
+| **backend** | `./scripts/build.sh backend` – Maven kompiliert, testet und paketiert das Spring-Boot-JAR |
+| **frontend** | `./scripts/build.sh frontend` – npm: Lint, Type-Check, Vitest, Vite-Build |
+| **deploy-test** | baut beide Docker-Images, startet die Testumgebung mit `docker compose` und prüft sie mit `./scripts/smoke-test.sh` |
+| **publish** | nur auf `main`: Images nach `ghcr.io` (GitHub Container Registry) |
+
+JAR und `dist/` werden als Build-Artefakte am Workflow-Lauf archiviert.
+
+**Lokal bauen:** `./scripts/build.sh` (oder `backend` / `frontend`)
+
+**Testumgebung lokal starten:**
+
+```bash
+docker compose up -d --build      # Frontend: http://localhost:8081, Backend: http://localhost:8080
+./scripts/smoke-test.sh           # prüft Frontend, API und Datenbank
+docker compose down -v            # stoppen und Daten löschen
+```
+
+**Pre-commit-Hook** (prüft den Frontend-Linter vor jedem Commit), einmalig aktivieren: `git config core.hooksPath scripts/hooks`
 
 ## Projektorganisation
 
@@ -48,6 +75,10 @@ Wie wir arbeiten (Branches, Commits, Definition of Done): siehe [CONTRIBUTING.md
 │   ├── tests/            Teststrategie, Testberichte
 │   ├── risiken/          Risikomanagement
 │   └── stunden/          Stundenaufzeichnung
-├── src/                  Quellcode (Struktur folgt mit dem Tech-Stack)
+├── src/
+│   ├── backend/          Spring-Boot-Backend (Maven, Dockerfile)
+│   └── frontend/         Vue-Frontend (npm, Dockerfile, nginx.conf)
+├── scripts/              Build-Skript, Smoke-Test, Git-Hooks
+├── docker-compose.yml    Testumgebung
 └── .github/              Issue- und PR-Templates, CI/CD-Workflows
 ```

@@ -1,0 +1,28 @@
+# Testumgebung für Kreisel-Kämpfe
+#
+#   docker compose up -d --build     starten  -> http://localhost:8081
+#   ./scripts/smoke-test.sh          prüfen, ob alles läuft
+#   docker compose down -v           stoppen und Daten löschen
+services:
+  backend:
+    build: ./src/backend
+    environment:
+      # In der Testumgebung kein SQL-Logging und keine H2-Konsole
+      SPRING_JPA_SHOW_SQL: "false"
+      SPRING_H2_CONSOLE_ENABLED: "false"
+    volumes:
+      - h2-data:/app/data
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  frontend:
+    build: ./src/frontend
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+
+volumes:
+  h2-data:
